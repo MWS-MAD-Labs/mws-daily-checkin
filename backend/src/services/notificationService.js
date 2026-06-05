@@ -4,6 +4,29 @@ const Notification = require('../models/Notification');
 const { getIO } = require('../config/socket');
 const { buildFrontendUrl } = require('../utils/frontendUrl');
 
+// Retry helper: exponential backoff, skips retry for permanent Slack errors
+const SLACK_PERMANENT_ERRORS = new Set([
+    'invalid_auth', 'account_inactive', 'token_revoked', 'no_permission',
+    'missing_scope', 'channel_not_found', 'user_not_found', 'not_in_channel'
+]);
+
+async function retryWithBackoff(fn, maxAttempts = 3, baseDelayMs = 300) {
+    let lastError;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            return await fn();
+        } catch (error) {
+            lastError = error;
+            const slackErr = error?.response?.data?.error;
+            if (slackErr && SLACK_PERMANENT_ERRORS.has(slackErr)) throw error;
+            if (attempt < maxAttempts) {
+                await new Promise((resolve) => setTimeout(resolve, baseDelayMs * (2 ** (attempt - 1))));
+            }
+        }
+    }
+    throw lastError;
+}
+
 // Slack configuration
 const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN;
 const SLACK_API_BASE = 'https://slack.com/api';
@@ -33,46 +56,30 @@ class SlackService {
     }
 
     async sendDirectMessage(userId, message, blocks = null) {
-        try {
+        const payload = { channel: userId, text: message };
+        if (blocks) payload.blocks = blocks;
+
+        return retryWithBackoff(async () => {
             console.log(`📤 Sending Slack DM to user ID: ${userId}`);
-            console.log(`📝 Message: ${message.substring(0, 100)}...`);
-
-            const payload = {
-                channel: userId,
-                text: message
-            };
-
-            if (blocks) {
-                payload.blocks = blocks;
-                console.log(`📦 Including ${blocks.length} block(s) in message`);
-            }
-
             const response = await this.client.post('/chat.postMessage', payload);
-            console.log(`✅ Slack API Response:`, response.data);
-
             if (response.data.ok) {
-                console.log(`✅ Slack DM sent successfully to user ${userId}`);
+                console.log(`✅ Slack DM sent to user ${userId}`);
                 return response.data;
-            } else {
-                console.error(`❌ Slack API returned not ok:`, response.data);
-                throw new Error(`Slack API error: ${response.data.error}`);
             }
-        } catch (error) {
-            console.error('❌ Slack DM send error:', error.response?.data || error.message);
-
-            // Log detailed error information
+            const err = new Error(`Slack API error: ${response.data.error}`);
+            err.response = { data: response.data };
+            throw err;
+        }, 3, 300).catch((error) => {
             if (error.response?.data) {
-                console.error('Slack API Error Details:', {
-                    status: error.response.status,
-                    statusText: error.response.statusText,
+                console.error('❌ Slack DM failed after retries:', {
                     error: error.response.data.error,
-                    needed: error.response.data.needed,
-                    provided: error.response.data.provided
+                    needed: error.response.data.needed
                 });
+            } else {
+                console.error('❌ Slack DM failed after retries:', error.message);
             }
-
             throw error;
-        }
+        });
     }
 
     async findUserByEmail(email) {
@@ -109,21 +116,18 @@ class SlackService {
 // Email notification functions
 class EmailService {
     async sendEmail(to, subject, html, text = null) {
-        try {
-            const mailOptions = {
-                from: process.env.SMTP_FROM || 'noreply@millennia21.id',
-                to,
-                subject,
-                html,
-                text: text || this.stripHtml(html)
-            };
-
-            const result = await emailTransporter.sendMail(mailOptions);
-            return result;
-        } catch (error) {
-            console.error('Email send error:', error.message);
-            throw error;
-        }
+        const mailOptions = {
+            from: process.env.SMTP_FROM || 'noreply@millennia21.id',
+            to,
+            subject,
+            html,
+            text: text || this.stripHtml(html)
+        };
+        return retryWithBackoff(() => emailTransporter.sendMail(mailOptions), 3, 500)
+            .catch((error) => {
+                console.error('Email send failed after retries:', error.message);
+                throw error;
+            });
     }
 
     stripHtml(html) {
