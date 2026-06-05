@@ -1,8 +1,14 @@
 import React, { memo, useMemo, useState } from "react";
+import { useAppTheme } from "@/hooks/useAppTheme";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, ComposedChart } from 'recharts';
 import { TrendingUp, TrendingDown, Minus, Calendar, ChevronDown, AlertTriangle } from "lucide-react";
 
 const ComparativeAnalysis = memo(({ data = {}, currentPeriod = 'today' }) => {
+    const isDark = useAppTheme();
+    const chartColors = useMemo(() => ({
+        current: isDark ? '#60a5fa' : '#3b82f6',
+        previous: isDark ? '#475569' : '#e5e7eb',
+    }), [isDark]);
     const [comparisonPeriod, setComparisonPeriod] = useState('week');
     const [comparisonType, setComparisonType] = useState('period-over-period');
 
@@ -119,15 +125,15 @@ const ComparativeAnalysis = memo(({ data = {}, currentPeriod = 'today' }) => {
     }, [comparisonData]);
 
     const getChangeIcon = (change) => {
-        if (change > 0) return <TrendingUp className="w-3 h-3 text-green-500" />;
-        if (change < 0) return <TrendingDown className="w-3 h-3 text-red-500" />;
-        return <Minus className="w-3 h-3 text-gray-500" />;
+        if (change > 0) return <TrendingUp className="w-3 h-3 text-green-500 dark:text-green-400" />;
+        if (change < 0) return <TrendingDown className="w-3 h-3 text-red-500 dark:text-red-400" />;
+        return <Minus className="w-3 h-3 text-gray-500 dark:text-gray-400" />;
     };
 
     const getChangeColor = (change) => {
-        if (change > 0) return 'text-green-600';
-        if (change < 0) return 'text-red-600';
-        return 'text-gray-600';
+        if (change > 0) return 'text-green-600 dark:text-green-400';
+        if (change < 0) return 'text-red-600 dark:text-red-400';
+        return 'text-gray-600 dark:text-gray-400';
     };
 
     const CustomTooltip = ({ active, payload, label }) => {
@@ -136,8 +142,8 @@ const ComparativeAnalysis = memo(({ data = {}, currentPeriod = 'today' }) => {
             return (
                 <div className="bg-card border border-border rounded-lg p-3 shadow-lg">
                     <p className="font-medium text-foreground mb-2">{label}</p>
-                    <p className="text-sm text-blue-600">Current: {data.current}</p>
-                    <p className="text-sm text-gray-600">Previous: {data.previous}</p>
+                    <p className="text-sm text-blue-600 dark:text-blue-400">Current: {data.current}</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">Previous: {data.previous}</p>
                     <p className={`text-sm font-medium ${getChangeColor(data.change)}`}>
                         Change: {data.change > 0 ? '+' : ''}{data.change}%
                     </p>
@@ -220,13 +226,13 @@ const ComparativeAnalysis = memo(({ data = {}, currentPeriod = 'today' }) => {
                             <Tooltip content={<CustomTooltip />} />
                             <Bar
                                 dataKey="current"
-                                fill="#3b82f6"
+                                fill={chartColors.current}
                                 radius={[2, 2, 0, 0]}
                                 name="Current Period"
                             />
                             <Bar
                                 dataKey="previous"
-                                fill="#e5e7eb"
+                                fill={chartColors.previous}
                                 radius={[2, 2, 0, 0]}
                                 name="Previous Period"
                             />
@@ -256,9 +262,9 @@ const ComparativeAnalysis = memo(({ data = {}, currentPeriod = 'today' }) => {
                                 </div>
                             )}
                             {comparisonData.changes.supportRate > 10 && (
-                                <div className="flex items-center gap-2 p-2 bg-red-50 rounded">
-                                    <AlertTriangle className="w-4 h-4 text-red-500" />
-                                    <span className="text-sm text-red-700">
+                                <div className="flex items-center gap-2 p-2 bg-red-50 dark:bg-red-900/20 rounded">
+                                    <AlertTriangle className="w-4 h-4 text-red-500 dark:text-red-400" />
+                                    <span className="text-sm text-red-700 dark:text-red-300">
                                         Support requests increased by {comparisonData.changes.supportRate}%
                                     </span>
                                 </div>

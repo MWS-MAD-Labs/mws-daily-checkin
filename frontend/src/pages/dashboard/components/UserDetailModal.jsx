@@ -1,22 +1,22 @@
-import React, { memo, useState, useEffect, useMemo } from "react";
+import { memo, useState, useEffect, useMemo, useCallback } from "react";
+import { useAppTheme } from "@/hooks/useAppTheme";
 import { X, TrendingUp, Calendar, User, Activity, AlertTriangle, ExternalLink } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { getUserTrends } from "../../../services/dashboardService";
 import { useNavigate } from "react-router-dom";
 
 const UserDetailModal = memo(({ user, isOpen, onClose }) => {
     const navigate = useNavigate();
+    const isDark = useAppTheme();
+    const chartColors = useMemo(() => ({
+        presence: isDark ? '#34d399' : '#10b981',
+        capacity: isDark ? '#60a5fa' : '#3b82f6',
+    }), [isDark]);
     const [userTrends, setUserTrends] = useState(null);
     const [loading, setLoading] = useState(false);
     const [selectedPeriod, setSelectedPeriod] = useState('month');
 
-    useEffect(() => {
-        if (isOpen && user?.id) {
-            fetchUserTrends();
-        }
-    }, [isOpen, user, selectedPeriod]);
-
-    const fetchUserTrends = async () => {
+    const fetchUserTrends = useCallback(async () => {
         if (!user?.id) return;
 
         setLoading(true);
@@ -31,7 +31,13 @@ const UserDetailModal = memo(({ user, isOpen, onClose }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [selectedPeriod, user?.id]);
+
+    useEffect(() => {
+        if (isOpen && user?.id) {
+            fetchUserTrends();
+        }
+    }, [fetchUserTrends, isOpen, user?.id]);
 
     const derivedSummary = useMemo(() => {
         if (userTrends?.summary) {
@@ -78,7 +84,7 @@ const UserDetailModal = memo(({ user, isOpen, onClose }) => {
                                 </p>
                             )}
                             {data.needsSupport && (
-                                <p className="text-xs text-red-500 font-medium">
+                                <p className="text-xs text-red-500 dark:text-red-400 font-medium">
                                     Support requested
                                 </p>
                             )}
@@ -112,7 +118,9 @@ const UserDetailModal = memo(({ user, isOpen, onClose }) => {
                     </div>
                     <div className="flex items-center gap-2">
                         <button
-                            onClick={() => navigate(`/emotional-wellness/${user.id}`)}
+                            onClick={() => navigate(`/emotional-wellness/${user.id}`, {
+                                state: { user, fromDashboard: true }
+                            })}
                             className="flex items-center gap-2 px-3 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm"
                             title="View full individual report"
                         >
@@ -156,7 +164,7 @@ const UserDetailModal = memo(({ user, isOpen, onClose }) => {
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <div className="glass glass-card p-4">
                                 <div className="flex items-center gap-2 mb-2">
-                                    <Activity className="w-4 h-4 text-emerald-500" />
+                                    <Activity className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
                                     <span className="text-sm font-medium text-foreground">Avg Presence</span>
                                 </div>
                                 <p className="text-2xl font-bold text-foreground">
@@ -165,7 +173,7 @@ const UserDetailModal = memo(({ user, isOpen, onClose }) => {
                             </div>
                             <div className="glass glass-card p-4">
                                 <div className="flex items-center gap-2 mb-2">
-                                    <TrendingUp className="w-4 h-4 text-blue-500" />
+                                    <TrendingUp className="w-4 h-4 text-blue-500 dark:text-blue-400" />
                                     <span className="text-sm font-medium text-foreground">Avg Capacity</span>
                                 </div>
                                 <p className="text-2xl font-bold text-foreground">
@@ -174,7 +182,7 @@ const UserDetailModal = memo(({ user, isOpen, onClose }) => {
                             </div>
                             <div className="glass glass-card p-4">
                                 <div className="flex items-center gap-2 mb-2">
-                                    <AlertTriangle className="w-4 h-4 text-red-500" />
+                                    <AlertTriangle className="w-4 h-4 text-red-500 dark:text-red-400" />
                                     <span className="text-sm font-medium text-foreground">Support Needed</span>
                                 </div>
                                 <p className="text-2xl font-bold text-foreground">
@@ -183,7 +191,7 @@ const UserDetailModal = memo(({ user, isOpen, onClose }) => {
                             </div>
                             <div className="glass glass-card p-4">
                                 <div className="flex items-center gap-2 mb-2">
-                                    <Activity className="w-4 h-4 text-purple-500" />
+                                    <Activity className="w-4 h-4 text-purple-500 dark:text-purple-400" />
                                     <span className="text-sm font-medium text-foreground">Emotional Stability</span>
                                 </div>
                                 <p className="text-2xl font-bold text-foreground">
@@ -296,19 +304,19 @@ const UserDetailModal = memo(({ user, isOpen, onClose }) => {
                                         <Line
                                             type="monotone"
                                             dataKey="presenceLevel"
-                                            stroke="#10b981"
+                                            stroke={chartColors.presence}
                                             strokeWidth={3}
-                                            dot={{ fill: '#10b981', strokeWidth: 2, r: 4 }}
-                                            activeDot={{ r: 6, stroke: '#10b981', strokeWidth: 2 }}
+                                            dot={{ fill: chartColors.presence, strokeWidth: 2, r: 4 }}
+                                            activeDot={{ r: 6, stroke: chartColors.presence, strokeWidth: 2 }}
                                             name="Presence"
                                         />
                                         <Line
                                             type="monotone"
                                             dataKey="capacityLevel"
-                                            stroke="#3b82f6"
+                                            stroke={chartColors.capacity}
                                             strokeWidth={3}
-                                            dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
-                                            activeDot={{ r: 6, stroke: '#3b82f6', strokeWidth: 2 }}
+                                            dot={{ fill: chartColors.capacity, strokeWidth: 2, r: 4 }}
+                                            activeDot={{ r: 6, stroke: chartColors.capacity, strokeWidth: 2 }}
                                             name="Capacity"
                                         />
                                     </LineChart>
@@ -426,7 +434,7 @@ const UserDetailModal = memo(({ user, isOpen, onClose }) => {
                                             )}
                                             {checkin.needsSupport && (
                                                 <div className="mt-2">
-                                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-red-100 text-red-800">
+                                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200">
                                                         <AlertTriangle className="w-3 h-3 mr-1" />
                                                         Support requested
                                                     </span>
@@ -447,4 +455,3 @@ const UserDetailModal = memo(({ user, isOpen, onClose }) => {
 UserDetailModal.displayName = 'UserDetailModal';
 
 export default UserDetailModal;
-

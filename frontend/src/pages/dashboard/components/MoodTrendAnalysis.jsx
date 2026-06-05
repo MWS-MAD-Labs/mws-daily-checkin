@@ -1,8 +1,14 @@
 import React, { memo, useMemo } from "react";
+import { useAppTheme } from "@/hooks/useAppTheme";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts';
 import { TrendingUp, BarChart3 } from "lucide-react";
 
 const MoodTrendAnalysis = memo(({ data = {}, period = 'week' }) => {
+    const isDark = useAppTheme();
+    const chartColors = useMemo(() => ({
+        presence: isDark ? '#34d399' : '#10b981',
+        capacity: isDark ? '#60a5fa' : '#3b82f6',
+    }), [isDark]);
     const moodTrends = useMemo(() => {
         if (!data?.recentActivity || data.recentActivity.length === 0) return [];
 
@@ -194,7 +200,7 @@ const MoodTrendAnalysis = memo(({ data = {}, period = 'week' }) => {
                             <Area
                                 type="monotone"
                                 dataKey="avgPresence"
-                                stroke="#10b981"
+                                stroke={chartColors.presence}
                                 fillOpacity={1}
                                 fill="url(#presenceGradient)"
                                 strokeWidth={2}
@@ -203,7 +209,7 @@ const MoodTrendAnalysis = memo(({ data = {}, period = 'week' }) => {
                             <Area
                                 type="monotone"
                                 dataKey="avgCapacity"
-                                stroke="#3b82f6"
+                                stroke={chartColors.capacity}
                                 fillOpacity={1}
                                 fill="url(#capacityGradient)"
                                 strokeWidth={2}

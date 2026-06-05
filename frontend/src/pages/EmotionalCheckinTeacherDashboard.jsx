@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
+import { useLocation } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { Calendar, Search, Users, AlertTriangle, CheckCircle2, Filter } from "lucide-react";
 import { getTeacherDailyCheckins } from "@/services/checkinService";
@@ -31,9 +32,11 @@ const gradeSortKey = (grade = "") => {
 
 const EmotionalCheckinTeacherDashboard = () => {
     const { user } = useSelector((state) => state.auth);
+    const location = useLocation();
+    const urlSearchRef = useRef(new URLSearchParams(location.search).get("search") || "");
     const todayISO = useMemo(() => new Date().toISOString().split("T")[0], []);
     const [selectedDate, setSelectedDate] = useState(todayISO);
-    const [searchQuery, setSearchQuery] = useState("");
+    const [searchQuery, setSearchQuery] = useState(urlSearchRef.current);
     const [selectedGrade, setSelectedGrade] = useState("");
     const [selectedClassName, setSelectedClassName] = useState("");
     const [selectedMoodState, setSelectedMoodState] = useState("");

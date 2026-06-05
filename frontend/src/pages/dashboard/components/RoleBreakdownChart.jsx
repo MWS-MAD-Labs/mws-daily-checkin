@@ -2,12 +2,12 @@ import { memo, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const COLORS = {
-    student: '#8884d8',
-    staff: '#82ca9d',
-    teacher: '#ffc658',
-    admin: '#ff7300',
-    directorate: '#00ff00',
-    superadmin: '#ff0000'
+    student: '#8b5cf6',
+    staff: '#34d399',
+    teacher: '#fbbf24',
+    admin: '#f97316',
+    directorate: '#22c55e',
+    superadmin: '#ef4444',
 };
 
 const CustomTooltip = ({ active, payload, label }) => {
