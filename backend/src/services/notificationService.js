@@ -142,6 +142,11 @@ class NotificationService {
         this.email = new EmailService();
     }
 
+    // Public wrapper so controllers can call notificationService.sendEmail() directly
+    async sendEmail(to, subject, html, text = null) {
+        return this.email.sendEmail(to, subject, html, text);
+    }
+
     emitToUserNotificationRooms(userId, eventName, payload = {}) {
         const normalizedUserId = String(userId || '').trim();
         if (!normalizedUserId || !eventName) return;
