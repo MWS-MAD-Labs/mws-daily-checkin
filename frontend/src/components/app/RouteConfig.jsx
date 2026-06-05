@@ -28,6 +28,7 @@ const StudentEmotionalCheckinPage = lazy(() => import(/* webpackPrefetch: true *
 const StudentFaceScanPage = lazy(() => import('@/pages/StudentFaceScanPage'));
 const StudentManualCheckinPage = lazy(() => import(/* webpackPrefetch: true */ '@/pages/StudentManualCheckinPage'));
 const StudentAICheckinPage = lazy(() => import(/* webpackPrefetch: true */ '@/pages/StudentAICheckinPage'));
+const StudentSupportHubPage = lazy(() => import(/* webpackPrefetch: true */ '@/pages/StudentSupportHubPage'));
 const NotFound = lazy(() => import(/* webpackPrefetch: true */ '@/pages/NotFound'));
 
 const MemoizedPageTransition = memo(({ children }) => (
@@ -101,6 +102,7 @@ const publicRoutes = [
     <Route key="student-face-scan" path="/student/emotional-checkin/face-scan" element={<ProtectedRoute allowedRoles={['student']}><MemoizedPageTransition><StudentFaceScanPage /></MemoizedPageTransition></ProtectedRoute>} />,
     <Route key="student-manual-checkin" path="/student/emotional-checkin/manual" element={<ProtectedRoute allowedRoles={['student']}><MemoizedPageTransition><StudentManualCheckinPage /></MemoizedPageTransition></ProtectedRoute>} />,
     <Route key="student-ai-checkin" path="/student/emotional-checkin/ai" element={<ProtectedRoute allowedRoles={['student']}><MemoizedPageTransition><StudentAICheckinPage /></MemoizedPageTransition></ProtectedRoute>} />,
+    <Route key="student-support-hub" path="/student/support-hub" element={<ProtectedRoute allowedRoles={['student']}><MemoizedPageTransition><StudentSupportHubPage /></MemoizedPageTransition></ProtectedRoute>} />,
 ];
 
 const RouteConfig = memo(() => (

@@ -1024,7 +1024,7 @@ const ProfilePage = memo(function ProfilePage() {
                 badge: emotionalBadge,
             },
             { key: "edit", icon: User, title: "Edit Profile", to: "/profile/edit" },
-            { key: "notif", icon: Bell, title: "Notifications", to: "/notifications" },
+            { key: "notif", icon: Bell, title: "Notification Settings", to: "/notifications/settings" },
         ];
 
         const shouldShowPersonalMenu = currentUser && !['directorate', 'admin', 'superadmin'].includes(currentUser.role);
