@@ -42,7 +42,7 @@ const UserListModal = memo(({ isOpen, onClose, title, users, totalUsers, type })
                     </div>
                     <button
                         onClick={onClose}
-                        className="p-3 hover:bg-red-50 hover:text-red-600 rounded-full transition-all duration-200 hover:scale-110 shadow-lg border border-transparent hover:border-red-200"
+                        className="p-3 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 rounded-full transition-all duration-200 hover:scale-110 shadow-lg border border-transparent hover:border-red-200 dark:hover:border-red-700/50"
                         title="Close modal"
                     >
                         <X className="w-6 h-6" />

@@ -3,7 +3,8 @@ import { useDispatch, useSelector } from "react-redux";
 import { getCheckinHistory } from "../../../store/slices/checkinSlice";
 import {
     User, TrendingUp, Calendar, Heart, Activity, ChevronDown, ChevronUp,
-    AlertTriangle, Brain, MessageCircle, Shield, Clock, Sun, Cloud, CloudRain, Zap
+    AlertTriangle, Brain, MessageCircle, Shield, Clock, Sun, Cloud, CloudRain, Zap,
+    Loader2, RefreshCw
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card";
 import { Badge } from "../../../components/ui/badge";
@@ -75,7 +76,8 @@ const CheckInRow = memo(({ checkin, isLast }) => {
 
     const WeatherIcon = WEATHER_ICONS[checkin.weatherType] || Sun;
     const weatherColor = WEATHER_COLORS[checkin.weatherType] || "text-amber-500";
-    const aiNeedsSupport = checkin.aiAnalysis?.needsSupport;
+    const aiNeedsSupport = checkin.aiAnalysis?.needsSupport &&
+        !(checkin.presenceLevel >= 7 && checkin.capacityLevel >= 7);
     const userRequestedSupport = !!(checkin.supportContactUserId || checkin.supportContactLegacyLabel);
     const hasAnySupportFlag = aiNeedsSupport || userRequestedSupport;
 
@@ -309,9 +311,13 @@ CheckInRow.displayName = "CheckInRow";
 const IndividualView = memo(({ selectedUser, targetUserId }) => {
     const dispatch = useDispatch();
     const { user: currentUser } = useSelector((state) => state.auth);
-    const { checkinHistory, loading } = useSelector((state) => state.checkin);
+    const { checkinHistory } = useSelector((state) => state.checkin);
 
-    const [period, setPeriod] = useState("all");
+    const [period, setPeriod] = useState("month");
+    const [historyLoading, setHistoryLoading] = useState(false);
+    const [historyError, setHistoryError] = useState(null);
+    const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
+    const [reloadToken, setReloadToken] = useState(0);
 
     const resolvedUser = useMemo(() => {
         return selectedUser || (targetUserId ? { id: targetUserId } : currentUser) || null;
@@ -330,25 +336,52 @@ const IndividualView = memo(({ selectedUser, targetUserId }) => {
 
     const dateRange = useMemo(() => getDateRange(period), [period]);
 
-    const fetchData = useCallback(() => {
+    const retryFetch = useCallback(() => {
+        setReloadToken((value) => value + 1);
+    }, []);
+
+    useEffect(() => {
         if (!resolvedUserId) return;
+        let isMounted = true;
+
+        setHistoryLoading(true);
+        setHistoryError(null);
+        setHasLoadedHistory(false);
+
         dispatch(getCheckinHistory({
             page: 1,
-            limit: 200,
+            limit: period === "all" ? 120 : 60,
             userId: resolvedUserId,
             startDate: dateRange.startDate,
             endDate: dateRange.endDate
-        }));
-    }, [dispatch, resolvedUserId, dateRange.startDate, dateRange.endDate]);
+        }))
+            .unwrap()
+            .catch((error) => {
+                if (!isMounted) return;
+                setHistoryError(
+                    typeof error === "string"
+                        ? error
+                        : "Failed to load this user's check-in history."
+                );
+            })
+            .finally(() => {
+                if (!isMounted) return;
+                setHistoryLoading(false);
+                setHasLoadedHistory(true);
+            });
 
-    useEffect(() => { fetchData(); }, [fetchData]);
+        return () => {
+            isMounted = false;
+        };
+    }, [dispatch, resolvedUserId, period, dateRange.startDate, dateRange.endDate, reloadToken]);
 
     const checkins = useMemo(() => {
+        if (!hasLoadedHistory) return [];
         if (!checkinHistory) return [];
         const data = checkinHistory.data || checkinHistory;
         const arr = Array.isArray(data) ? data : (data.checkins || []);
         return [...arr].sort((a, b) => new Date(b.date) - new Date(a.date));
-    }, [checkinHistory]);
+    }, [checkinHistory, hasLoadedHistory]);
 
     /* ── Wellness Snapshot (computed from filtered period) ── */
     const snapshot = useMemo(() => {
@@ -361,7 +394,7 @@ const IndividualView = memo(({ selectedUser, targetUserId }) => {
             totalP += c.presenceLevel || 0;
             totalC += c.capacityLevel || 0;
             if (c.supportContactUserId || c.supportContactLegacyLabel) supportRequests++;
-            else if (c.aiAnalysis?.needsSupport) aiFlags++;
+            else if (c.aiAnalysis?.needsSupport && !(c.presenceLevel >= 7 && c.capacityLevel >= 7)) aiFlags++;
             (c.selectedMoods || []).forEach((m) => {
                 moodFreq[m] = (moodFreq[m] || 0) + 1;
             });
@@ -406,10 +439,35 @@ const IndividualView = memo(({ selectedUser, targetUserId }) => {
                         </Button>
                     ))}
                 </div>
-                {loading && (
+                {historyLoading && (
                     <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin ml-2" />
                 )}
             </div>
+
+            {historyError && (
+                <Card className="border-destructive/30 bg-destructive/5">
+                    <CardContent className="py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div>
+                            <p className="text-sm font-medium text-destructive">Unable to load report history</p>
+                            <p className="text-xs text-muted-foreground mt-1">{historyError}</p>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={retryFetch} className="flex items-center gap-2">
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            Retry
+                        </Button>
+                    </CardContent>
+                </Card>
+            )}
+
+            {historyLoading && !hasLoadedHistory ? (
+                <Card>
+                    <CardContent className="py-12 flex items-center justify-center gap-3 text-sm text-muted-foreground">
+                        <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                        Loading full report...
+                    </CardContent>
+                </Card>
+            ) : (
+                <>
 
             {/* ── Stats + Wellness Snapshot Card ── */}
             <Card>
@@ -519,7 +577,7 @@ const IndividualView = memo(({ selectedUser, targetUserId }) => {
                         <div className="text-center py-10 px-4">
                             <Clock className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
                             <p className="text-sm text-muted-foreground">
-                                {loading ? "Loading..." : `No check-ins found for ${dateRange.label.toLowerCase()}.`}
+                                {historyLoading ? "Refreshing..." : `No check-ins found for ${dateRange.label.toLowerCase()}.`}
                             </p>
                         </div>
                     ) : (
@@ -535,6 +593,8 @@ const IndividualView = memo(({ selectedUser, targetUserId }) => {
                     )}
                 </CardContent>
             </Card>
+                </>
+            )}
         </div>
     );
 });

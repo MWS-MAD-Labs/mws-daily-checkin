@@ -1,10 +1,35 @@
+const ALLOWED_PRIMARY_EMOTIONS = new Set([
+    'happy', 'sad', 'angry', 'surprised', 'fearful',
+    'disgusted', 'neutral', 'anxious', 'calm'
+]);
+
+const toFiniteNumber = (value, fallback) => {
+    const num = typeof value === 'number' ? value : parseFloat(value);
+    return Number.isFinite(num) ? num : fallback;
+};
+
+const clamp = (value, min, max, fallback) => {
+    const num = toFiniteNumber(value, fallback);
+    return Math.min(max, Math.max(min, num));
+};
+
 export const generateAIAnalysis = (emotionData) => {
-    const primaryEmotion = emotionData.primaryEmotion;
-    const confidence = emotionData.confidence;
-    const valence = emotionData.valence;
-    const arousal = emotionData.arousal;
-    const intensity = emotionData.intensity;
-    const explanations = emotionData.explanations;
+    const safeData = (emotionData && typeof emotionData === 'object') ? emotionData : {};
+
+    const rawPrimary = String(safeData.primaryEmotion || '').toLowerCase().trim();
+    const primaryEmotion = ALLOWED_PRIMARY_EMOTIONS.has(rawPrimary) ? rawPrimary : 'neutral';
+    const confidence = clamp(safeData.confidence, 0, 100, 60);
+    const valence = clamp(safeData.valence, -1, 1, 0);
+    const arousal = clamp(safeData.arousal, -1, 1, 0);
+    const intensity = clamp(safeData.intensity, 0, 100, 50);
+    const explanations = Array.isArray(safeData.explanations)
+        ? safeData.explanations.map((e) => String(e || '')).filter(Boolean)
+        : (typeof safeData.explanations === 'string' && safeData.explanations.trim()
+            ? [safeData.explanations.trim()]
+            : []);
+    const secondaryEmotions = Array.isArray(safeData.secondaryEmotions)
+        ? safeData.secondaryEmotions.map((e) => String(e || '')).filter(Boolean)
+        : [];
 
     // AI-generated emotion labels based on actual data
     const emotionLabels = {
@@ -624,7 +649,7 @@ export const generateAIAnalysis = (emotionData) => {
     };
 
     const insightChips = [
-        ...((emotionData.secondaryEmotions || []).slice(0, 2).map((chip) => ({ label: chip, type: "mood" }))),
+        ...(secondaryEmotions.slice(0, 2).map((chip) => ({ label: chip, type: "mood" }))),
         { label: weather.internal, type: "weather" },
         authenticity.isMasked ? { label: "inner " + authenticity.hiddenEmotionLabel, type: "insight" } : null,
         needsSupport ? { label: "support recommended", type: "support" } : null
@@ -647,7 +672,7 @@ export const generateAIAnalysis = (emotionData) => {
         weatherIcon: weather.icon,
         internalWeather: weather.internal,
         weatherDesc: weather.desc,
-        selfreportedEmotions: [primaryEmotion, ...(emotionData.secondaryEmotions || [])],
+        selfreportedEmotions: [primaryEmotion, ...secondaryEmotions],
         microExpressions: microExpressions,
         aiAnalysis: `Through careful observation of your facial expressions, I can see you're experiencing a ${primaryEmotion} emotional state. Your eyes and facial muscles tell a story of ${intensity > 70 ? 'intense' : intensity > 40 ? 'moderate' : 'gentle'} emotional expression, with a ${valence > 0.2 ? 'positive' : valence < -0.2 ? 'challenging' : 'balanced'} emotional tone. This authentic expression reveals so much about your current inner experience.${authenticity.isMasked ? ` There is also a quiet undertone of ${authenticity.hiddenEmotionLabel} gently asking to be acknowledged.` : ''}`,
         psychologicalInsight: psychologicalInsight,
@@ -664,7 +689,7 @@ export const generateAIAnalysis = (emotionData) => {
         arousal: arousal,
         intensity: intensity,
         explanations: explanations,
-        temporalAnalysis: emotionData.temporalAnalysis,
+        temporalAnalysis: safeData.temporalAnalysis,
         analysisFlags: authenticity.isMasked
             ? [{
                 type: 'masked_emotion',

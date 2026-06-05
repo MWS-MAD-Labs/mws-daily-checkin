@@ -75,9 +75,10 @@ const dashboardSlice = createSlice({
             state.selectedDate = action.payload;
         },
         removeFlaggedUser: (state, action) => {
+            const requestId = action.payload?.requestId || action.payload;
             if (state.stats?.flaggedUsers) {
                 state.stats.flaggedUsers = state.stats.flaggedUsers.filter(
-                    user => user.id !== action.payload.requestId
+                    user => user.id !== requestId
                 );
             }
         },

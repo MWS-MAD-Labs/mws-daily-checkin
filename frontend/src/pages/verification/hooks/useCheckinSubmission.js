@@ -113,6 +113,18 @@ export const useCheckinSubmission = ({
                 weatherIcon: analysis.weatherIcon || "☀️",
                 weatherDescription: analysis.weatherDesc || "",
                 preparedAiAnalysis,
+                aiSummary: analysis.personalizedRecommendation || "",
+                aiInsights: analysis.detailedRecommendations || [],
+                aiGenerated: true,
+                aiEmotionScan: analysis.aiEmotionScan || {
+                    valence: analysis.valence,
+                    arousal: analysis.arousal,
+                    intensity: analysis.intensity,
+                    detectedEmotion: analysis.detectedEmotion,
+                    confidence: analysis.confidence || 75,
+                    explanations: analysis.explanations || []
+                },
+                personalizedGreeting: analysis.personalizedRecommendation || "",
                 needsSupport: preparedAiAnalysis.needsSupport
             };
 

@@ -5,7 +5,7 @@ import { fetchUserById } from "../../store/slices/userSlice";
 import IndividualView from "./components/IndividualView";
 import { Card, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
-import { ArrowLeft, User } from "lucide-react";
+import { ArrowLeft, Loader2, User } from "lucide-react";
 import { motion } from "framer-motion";
 
 const IndividualDashboard = memo(() => {
@@ -21,6 +21,7 @@ const IndividualDashboard = memo(() => {
     const [userAccessError, setUserAccessError] = useState(null);
 
     const locationStateUser = location.state?.user;
+    const cameFromDashboard = Boolean(location.state?.fromDashboard);
     const isHeadUnit = currentUser?.role === 'head_unit';
 
     useEffect(() => {
@@ -63,9 +64,20 @@ const IndividualDashboard = memo(() => {
             } catch (error) {
                 if (isMounted) {
                     console.error('Error loading targeted user:', error);
-                    if (isHeadUnit) {
-                        setUserAccessError('You can only view reports for members within your unit.');
-                    }
+                    setSelectedUser({
+                        id: userId,
+                        _id: userId,
+                        name: locationStateUser?.name || 'Selected user',
+                        role: locationStateUser?.role,
+                        department: locationStateUser?.department,
+                        unit: locationStateUser?.unit,
+                        email: locationStateUser?.email
+                    });
+                    setUserAccessError(
+                        isHeadUnit
+                            ? 'Profile details could not be loaded. Showing report data available to your dashboard access.'
+                            : 'Profile details could not be loaded. Showing available report data.'
+                    );
                 }
             } finally {
                 if (isMounted) setResolvingUser(false);
@@ -113,11 +125,11 @@ const IndividualDashboard = memo(() => {
                     <div className="flex items-center justify-between mb-4">
                         <Button
                             variant="ghost"
-                            onClick={userId ? handleBackToPersonal : handleBackToMain}
+                            onClick={userId && !cameFromDashboard ? handleBackToPersonal : handleBackToMain}
                             className="flex items-center gap-2 hover:bg-primary/10"
                         >
                             <ArrowLeft className="w-4 h-4" />
-                            {userId ? 'Back to My Dashboard' : 'Back to Main Dashboard'}
+                            {userId && !cameFromDashboard ? 'Back to My Dashboard' : 'Back to Main Dashboard'}
                         </Button>
 
                         <div className="text-right">
@@ -149,14 +161,22 @@ const IndividualDashboard = memo(() => {
                     </Card>
                 </motion.div>
 
+                {resolvingUser && !selectedUser && (
+                    <div className="mb-6">
+                        <Card className="glass glass-card">
+                            <CardContent className="py-10 flex items-center justify-center gap-3 text-sm text-muted-foreground">
+                                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                                Loading report context...
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
+
                 {userAccessError && userId && !resolvingUser && (
                     <div className="mb-6">
-                        <Card className="border-destructive/30 bg-destructive/5">
+                        <Card className="border-amber-300/40 bg-amber-500/10">
                             <CardContent className="py-5">
-                                <p className="text-sm text-destructive mb-3">{userAccessError}</p>
-                                <Button variant="outline" size="sm" onClick={handleBackToPersonal}>
-                                    Back to my report
-                                </Button>
+                                <p className="text-sm text-amber-700 dark:text-amber-200">{userAccessError}</p>
                             </CardContent>
                         </Card>
                     </div>

@@ -227,19 +227,23 @@ const queueSupportNotifications = ({
                 notificationService.sendEmailNotification(notificationPayload)
             ]);
 
-            if (slackResult.status === 'rejected') {
-                console.error('❌ Slack notification failed:', slackResult.reason?.message || slackResult.reason);
-            } else if (slackResult.value?.success === false) {
-                console.error('❌ Slack notification failed:', slackResult.value.error);
+            const slackOk = slackResult.status === 'fulfilled' && slackResult.value?.success !== false;
+            const emailOk = emailResult.status === 'fulfilled' && emailResult.value?.success !== false;
+
+            if (!slackOk) {
+                const reason = slackResult.reason?.message || slackResult.value?.error || 'unknown';
+                console.error(`❌ Slack notification failed for ${logLabel}: ${reason}`);
+            }
+            if (!emailOk) {
+                const reason = emailResult.reason?.message || emailResult.value?.error || 'unknown';
+                console.error(`❌ Email notification failed for ${logLabel}: ${reason}`);
             }
 
-            if (emailResult.status === 'rejected') {
-                console.error('❌ Email notification failed:', emailResult.reason?.message || emailResult.reason);
-            } else if (emailResult.value?.success === false) {
-                console.error('❌ Email notification failed:', emailResult.value.error);
+            if (!slackOk && !emailOk) {
+                console.error(`🚨 CRITICAL: Both Slack and email delivery failed for support request — checkinId: ${notificationPayload.checkinId}, contact: ${notificationPayload.supportContactEmail}`);
+            } else {
+                console.log(`✅ Support notifications delivered for ${logLabel} (slack=${slackOk}, email=${emailOk})`);
             }
-
-            console.log(`✅ Background support notifications finished for ${logLabel}`);
         } catch (error) {
             console.error(`❌ Background support notifications crashed for ${logLabel}:`, error);
         }
@@ -1306,12 +1310,18 @@ const getCheckinHistory = async (req, res) => {
             if (!isSelf && !elevated && !dashboardRole) {
                 return sendError(res, 'Access denied for this user\'s history', 403);
             }
-            query.userId = requestedUserId;
+            query.$or = [
+                { userId: requestedUserId },
+                { legacyResolvedUserId: requestedUserId }
+            ];
             const requestedUser = await findAnyUserById(requestedUserId, 'role');
             queryRole = requestedUser?.role || req.user.role;
         } else {
             // Default to current user's history if no userId specified
-            query.userId = req.user.id;
+            query.$or = [
+                { userId: req.user.id },
+                { legacyResolvedUserId: req.user.id }
+            ];
         }
 
         const CheckinModel = getCheckinModelForRole(queryRole);
@@ -1338,13 +1348,24 @@ const getCheckinHistory = async (req, res) => {
             .populate('supportContactUserId', 'name role department');
 
         const pagination = getPaginationInfo(page, limit, total);
-        const resolvedCheckins = [];
-        for (const checkin of checkins) {
-            const user = await findAnyUserById(checkin.userId, 'name email role department unit');
+
+        // Collect unique userId values from the result set, then fetch all at once
+        // to avoid N+1 queries (previously fired one DB call per checkin).
+        const uniqueUserIds = [...new Set(
+            checkins.map((c) => String(c.userId)).filter(Boolean)
+        )];
+        const userLookupResults = await Promise.all(
+            uniqueUserIds.map((uid) => findAnyUserById(uid, 'name email role department unit'))
+        );
+        const userMap = Object.fromEntries(
+            uniqueUserIds.map((uid, i) => [uid, userLookupResults[i]])
+        );
+
+        const resolvedCheckins = checkins.map((checkin) => {
             const normalized = checkin.toObject();
-            normalized.userId = user || checkin.userId;
-            resolvedCheckins.push(normalized);
-        }
+            normalized.userId = userMap[String(checkin.userId)] || checkin.userId;
+            return normalized;
+        });
 
         sendSuccess(res, 'Check-in history retrieved', {
             checkins: resolvedCheckins,
@@ -1664,7 +1685,7 @@ Keep the analysis simple and focused on basic facial emotion recognition.`;
             console.error('? Vision AI request failed:', apiError.message);
             usedFallback = true;
             fallbackMessage = 'AI vision service hit a quota wall. Providing supportive insights instead—Manual Check-in remains available.';
-            emotionResult = buildVisionFallbackResult();
+            emotionResult = normalizeEmotionResult(buildVisionFallbackResult());
             if (req.file.path) {
                 try { fs.unlinkSync(req.file.path); } catch (_) {}
             }
@@ -1730,6 +1751,8 @@ Keep the analysis simple and focused on basic facial emotion recognition.`;
             }
         }
 
+        emotionResult = normalizeEmotionResult(emotionResult);
+
         const payload = { emotionResult };
         if (usedFallback) {
             payload.fallback = true;
@@ -1745,6 +1768,56 @@ Keep the analysis simple and focused on basic facial emotion recognition.`;
         console.error('? Emotion analysis error:', error);
         sendError(res, 'Failed to analyze emotion', 500);
     }
+};
+
+const ALLOWED_PRIMARY_EMOTIONS = new Set([
+    'happy', 'sad', 'angry', 'surprised', 'fearful',
+    'disgusted', 'neutral', 'anxious', 'calm'
+]);
+
+const clampNumber = (value, min, max, fallback) => {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return fallback;
+    return Math.min(max, Math.max(min, num));
+};
+
+const normalizeEmotionResult = (raw) => {
+    const safe = (raw && typeof raw === 'object') ? raw : {};
+
+    const rawPrimary = String(safe.primaryEmotion || '').toLowerCase().trim();
+    const primaryEmotion = ALLOWED_PRIMARY_EMOTIONS.has(rawPrimary) ? rawPrimary : 'neutral';
+
+    const secondary = Array.isArray(safe.secondaryEmotions)
+        ? safe.secondaryEmotions
+            .map((e) => String(e || '').toLowerCase().trim())
+            .filter(Boolean)
+            .slice(0, 3)
+        : [];
+
+    const explanationsSource = Array.isArray(safe.explanations)
+        ? safe.explanations
+        : (typeof safe.explanations === 'string' ? [safe.explanations] : []);
+    const explanations = explanationsSource
+        .map((e) => String(e || '').trim())
+        .filter(Boolean)
+        .slice(0, 5);
+
+    return {
+        primaryEmotion,
+        secondaryEmotions: secondary,
+        valence: clampNumber(safe.valence, -1, 1, 0),
+        arousal: clampNumber(safe.arousal, -1, 1, 0),
+        intensity: clampNumber(safe.intensity, 0, 100, 50),
+        confidence: clampNumber(safe.confidence, 0, 100, 60),
+        explanations: explanations.length
+            ? explanations
+            : ['AI vision analysis completed with limited detail.'],
+        narrative: typeof safe.narrative === 'string' ? safe.narrative : (explanations[0] || ''),
+        grounding: typeof safe.grounding === 'string' ? safe.grounding : undefined,
+        microAction: typeof safe.microAction === 'string' ? safe.microAction : undefined,
+        temporalAnalysis: safe.temporalAnalysis || undefined,
+        fallback: Boolean(safe.fallback)
+    };
 };
 
 const buildVisionFallbackResult = (seed = Date.now()) => {

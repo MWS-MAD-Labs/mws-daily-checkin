@@ -1,4 +1,4 @@
-import { memo, Suspense, lazy } from "react";
+import { memo, Suspense, lazy, useCallback, useState } from "react";
 
 const FlaggedUsers = lazy(() => import("../FlaggedStudents"));
 const CheckInRequests = lazy(() => import("../CheckInRequests"));
@@ -23,9 +23,25 @@ const ContentFallback = memo(() => (
 
 ContentFallback.displayName = 'ContentFallback';
 
-const ContentSections = memo(({ realData, selectedPeriod, userId, isHeadUnit, isDirectorate }) => {
+const ContentSections = memo(({ realData, selectedPeriod, userId, isHeadUnit, isDirectorate, onSupportRequestUpdated }) => {
     const data = realData || {};
     const canViewStaffExplorer = (isHeadUnit || isDirectorate) && Array.isArray(data?.unitStaffDetails) && data.unitStaffDetails.length > 0;
+    const [focusedSupportRequestId, setFocusedSupportRequestId] = useState(null);
+
+    const handleFocusSupportRequest = useCallback((requestId) => {
+        if (!requestId) return;
+        setFocusedSupportRequestId(requestId);
+
+        window.requestAnimationFrame(() => {
+            document
+                .querySelector('[data-section="checkin-requests"]')
+                ?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+    }, []);
+
+    const handleSupportRequestFocusHandled = useCallback(() => {
+        setFocusedSupportRequestId(null);
+    }, []);
 
     return (
         <>
@@ -43,6 +59,8 @@ const ContentSections = memo(({ realData, selectedPeriod, userId, isHeadUnit, is
                             staff={data?.unitStaffDetails || []}
                             summary={data?.unitStaffSummary}
                             isDirectorate={isDirectorate && !isHeadUnit}
+                            supportRequests={data?.checkinRequests || []}
+                            onFocusSupportRequest={handleFocusSupportRequest}
                         />
                     </div>
                 </Suspense>
@@ -52,7 +70,15 @@ const ContentSections = memo(({ realData, selectedPeriod, userId, isHeadUnit, is
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-4 md:mb-6">
                 <Suspense fallback={<ContentFallback />}>
                     {/* Check-in Requests - Prioritized for immediate attention */}
-                    <CheckInRequests requests={data?.checkinRequests || []} isHeadUnit={isHeadUnit} />
+                    <div data-section="checkin-requests" className="scroll-mt-24">
+                        <CheckInRequests
+                            requests={data?.checkinRequests || []}
+                            isHeadUnit={isHeadUnit}
+                            focusedRequestId={focusedSupportRequestId}
+                            onRequestFocusHandled={handleSupportRequestFocusHandled}
+                            onRequestUpdated={onSupportRequestUpdated}
+                        />
+                    </div>
                 </Suspense>
 
                 <Suspense fallback={<ContentFallback />}>

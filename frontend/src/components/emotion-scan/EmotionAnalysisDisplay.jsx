@@ -37,7 +37,7 @@ const EmotionAnalysisDisplay = memo(({ results }) => {
                     <h3 className="text-lg font-semibold text-foreground">AI Analysis Results</h3>
                     <div className="ml-auto flex items-center gap-2">
                         <div className="text-sm text-muted-foreground">Confidence:</div>
-                        <div className="px-2 py-1 bg-emerald-500/10 text-emerald-600 rounded text-xs font-medium">
+                        <div className="px-2 py-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded text-xs font-medium">
                             {confidence}%
                         </div>
                     </div>

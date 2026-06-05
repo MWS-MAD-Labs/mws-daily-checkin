@@ -69,26 +69,26 @@ const InsightsPanel = memo(({ insights = [] }) => {
     const getIcon = (type) => {
         switch (type) {
             case 'success':
-                return <CheckCircle className="w-5 h-5 text-green-500" />;
+                return <CheckCircle className="w-5 h-5 text-green-500 dark:text-green-400" />;
             case 'warning':
-                return <AlertTriangle className="w-5 h-5 text-yellow-500" />;
+                return <AlertTriangle className="w-5 h-5 text-yellow-500 dark:text-yellow-400" />;
             case 'alert':
-                return <AlertCircle className="w-5 h-5 text-red-500" />;
+                return <AlertCircle className="w-5 h-5 text-red-500 dark:text-red-400" />;
             default:
-                return <Info className="w-5 h-5 text-blue-500" />;
+                return <Info className="w-5 h-5 text-blue-500 dark:text-blue-400" />;
         }
     };
 
     const getBgColor = (type) => {
         switch (type) {
             case 'success':
-                return 'bg-green-50 border-green-200';
+                return 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700/50';
             case 'warning':
-                return 'bg-yellow-50 border-yellow-200';
+                return 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-700/50';
             case 'alert':
-                return 'bg-red-50 border-red-200';
+                return 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700/50';
             default:
-                return 'bg-blue-50 border-blue-200';
+                return 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700/50';
         }
     };
 

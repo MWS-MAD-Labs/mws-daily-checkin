@@ -43,70 +43,70 @@ const weatherOptions = [
         icon: Sun,
         label: "Sunny & Clear",
         value: "sunny",
-        gradient: "from-[#fde68a] via-[#fbbf24] to-[#f59e0b]",
-        iconTone: "text-amber-600",
+        gradient: "from-[var(--cw-sunny-from)] via-[var(--cw-sunny-via)] to-[var(--cw-sunny-to)]",
+        iconTone: "text-amber-600 dark:text-amber-400",
     },
     {
         icon: Cloud,
         label: "Partly Cloudy",
         value: "partly-cloudy",
-        gradient: "from-[#e2e8f0] via-[#cbd5f5] to-[#94a3b8]",
+        gradient: "from-[var(--cw-partly-cloudy-from)] via-[var(--cw-partly-cloudy-via)] to-[var(--cw-partly-cloudy-to)]",
         iconTone: "text-slate-500",
     },
     {
         icon: CloudRain,
         label: "Light Rain",
         value: "light-rain",
-        gradient: "from-[#bfdbfe] via-[#93c5fd] to-[#38bdf8]",
+        gradient: "from-[var(--cw-light-rain-from)] via-[var(--cw-light-rain-via)] to-[var(--cw-light-rain-to)]",
         iconTone: "text-sky-600",
     },
     {
         icon: Zap,
         label: "Thunderstorms",
         value: "thunderstorms",
-        gradient: "from-[#fca5a5] via-[#f97316] to-[#fbbf24]",
+        gradient: "from-[var(--cw-thunderstorms-from)] via-[var(--cw-thunderstorms-via)] to-[var(--cw-thunderstorms-to)]",
         iconTone: "text-orange-600",
     },
     {
         icon: Tornado,
         label: "Chaotic",
         value: "tornado",
-        gradient: "from-[#e5e7eb] via-[#cbd5f5] to-[#94a3b8]",
+        gradient: "from-[var(--cw-tornado-from)] via-[var(--cw-tornado-via)] to-[var(--cw-tornado-to)]",
         iconTone: "text-slate-600",
     },
     {
         icon: Snowflake,
         label: "Snowy & Still",
         value: "snowy",
-        gradient: "from-[#e0f2fe] via-[#bfdbfe] to-[#93c5fd]",
+        gradient: "from-[var(--cw-snowy-from)] via-[var(--cw-snowy-via)] to-[var(--cw-snowy-to)]",
         iconTone: "text-sky-600",
     },
     {
         icon: Rainbow,
         label: "Rainbow",
         value: "rainbow",
-        gradient: "from-[#fbcfe8] via-[#a78bfa] to-[#6ee7b7]",
+        gradient: "from-[var(--cw-rainbow-from)] via-[var(--cw-rainbow-via)] to-[var(--cw-rainbow-to)]",
         iconTone: "text-indigo-500",
     },
     {
         icon: CloudFog,
         label: "Foggy",
         value: "foggy",
-        gradient: "from-[#e2e8f0] via-[#c7d2fe] to-[#d1d5db]",
+        gradient: "from-[var(--cw-foggy-from)] via-[var(--cw-foggy-via)] to-[var(--cw-foggy-to)]",
         iconTone: "text-slate-500",
     },
     {
         icon: Flame,
         label: "Heatwave",
         value: "heatwave",
-        gradient: "from-[#fecaca] via-[#fb7185] to-[#f97316]",
+        gradient: "from-[var(--cw-heatwave-from)] via-[var(--cw-heatwave-via)] to-[var(--cw-heatwave-to)]",
         iconTone: "text-rose-500",
     },
     {
         icon: Wind,
         label: "Windy",
         value: "windy",
-        gradient: "from-[#bae6fd] via-[#7dd3fc] to-[#22d3ee]",
+        gradient: "from-[var(--cw-windy-from)] via-[var(--cw-windy-via)] to-[var(--cw-windy-to)]",
         iconTone: "text-cyan-600",
     },
 ];
@@ -116,15 +116,15 @@ const moodOptions = [
         icon: Smile,
         label: "Happy",
         value: "happy",
-        gradient: "from-[#fde68a] via-[#fbbf24] to-[#fb7185]",
-        iconTone: "text-amber-700",
+        gradient: "from-[var(--cm-happy-from)] via-[var(--cm-happy-via)] to-[var(--cm-happy-to)]",
+        iconTone: "text-amber-700 dark:text-amber-400",
         tagline: "Bright energy",
     },
     {
         icon: Zap,
         label: "Excited",
         value: "excited",
-        gradient: "from-[#fbcfe8] via-[#f472b6] to-[#a855f7]",
+        gradient: "from-[var(--cm-excited-from)] via-[var(--cm-excited-via)] to-[var(--cm-excited-to)]",
         iconTone: "text-rose-600",
         tagline: "Ready to shine",
     },
@@ -132,7 +132,7 @@ const moodOptions = [
         icon: HeartPulse,
         label: "Calm",
         value: "calm",
-        gradient: "from-[#bbf7d0] via-[#6ee7b7] to-[#34d399]",
+        gradient: "from-[var(--cm-calm-from)] via-[var(--cm-calm-via)] to-[var(--cm-calm-to)]",
         iconTone: "text-emerald-600",
         tagline: "Steady and grounded",
     },
@@ -140,7 +140,7 @@ const moodOptions = [
         icon: Sparkles,
         label: "Hopeful",
         value: "hopeful",
-        gradient: "from-[#bae6fd] via-[#a78bfa] to-[#fbcfe8]",
+        gradient: "from-[var(--cm-hopeful-from)] via-[var(--cm-hopeful-via)] to-[var(--cm-hopeful-to)]",
         iconTone: "text-indigo-500",
         tagline: "Looking ahead",
     },
@@ -148,7 +148,7 @@ const moodOptions = [
         icon: Frown,
         label: "Sad",
         value: "sad",
-        gradient: "from-[#bfdbfe] via-[#818cf8] to-[#38bdf8]",
+        gradient: "from-[var(--cm-sad-from)] via-[var(--cm-sad-via)] to-[var(--cm-sad-to)]",
         iconTone: "text-blue-600",
         tagline: "Need a lift",
     },
@@ -156,7 +156,7 @@ const moodOptions = [
         icon: AlertCircle,
         label: "Anxious",
         value: "anxious",
-        gradient: "from-[#ddd6fe] via-[#a5b4fc] to-[#93c5fd]",
+        gradient: "from-[var(--cm-anxious-from)] via-[var(--cm-anxious-via)] to-[var(--cm-anxious-to)]",
         iconTone: "text-indigo-500",
         tagline: "A bit on edge",
     },
@@ -164,7 +164,7 @@ const moodOptions = [
         icon: Flame,
         label: "Angry",
         value: "angry",
-        gradient: "from-[#fecaca] via-[#f87171] to-[#fb7185]",
+        gradient: "from-[var(--cm-angry-from)] via-[var(--cm-angry-via)] to-[var(--cm-angry-to)]",
         iconTone: "text-rose-600",
         tagline: "Feeling intense",
     },
@@ -172,7 +172,7 @@ const moodOptions = [
         icon: Shield,
         label: "Fear",
         value: "fear",
-        gradient: "from-[#e2e8f0] via-[#c4b5fd] to-[#a5b4fc]",
+        gradient: "from-[var(--cm-fear-from)] via-[var(--cm-fear-via)] to-[var(--cm-fear-to)]",
         iconTone: "text-slate-600",
         tagline: "Feeling uneasy",
     },
@@ -180,7 +180,7 @@ const moodOptions = [
         icon: Brain,
         label: "Overwhelmed",
         value: "overwhelmed",
-        gradient: "from-[#fecdd3] via-[#c4b5fd] to-[#93c5fd]",
+        gradient: "from-[var(--cm-overwhelmed-from)] via-[var(--cm-overwhelmed-via)] to-[var(--cm-overwhelmed-to)]",
         iconTone: "text-violet-600",
         tagline: "Too much at once",
     },
@@ -188,7 +188,7 @@ const moodOptions = [
         icon: Moon,
         label: "Tired",
         value: "tired",
-        gradient: "from-[#e2e8f0] via-[#cbd5f5] to-[#a5b4fc]",
+        gradient: "from-[var(--cm-tired-from)] via-[var(--cm-tired-via)] to-[var(--cm-tired-to)]",
         iconTone: "text-slate-600",
         tagline: "Low energy",
     },
@@ -196,15 +196,15 @@ const moodOptions = [
         icon: Coffee,
         label: "Hungry",
         value: "hungry",
-        gradient: "from-[#fde68a] via-[#fcd34d] to-[#f59e0b]",
-        iconTone: "text-amber-700",
+        gradient: "from-[var(--cm-hungry-from)] via-[var(--cm-hungry-via)] to-[var(--cm-hungry-to)]",
+        iconTone: "text-amber-700 dark:text-amber-400",
         tagline: "Need a boost",
     },
     {
         icon: Users,
         label: "Lonely",
         value: "lonely",
-        gradient: "from-[#e0f2fe] via-[#c4b5fd] to-[#e9d5ff]",
+        gradient: "from-[var(--cm-lonely-from)] via-[var(--cm-lonely-via)] to-[var(--cm-lonely-to)]",
         iconTone: "text-sky-600",
         tagline: "Want connection",
     },
@@ -212,7 +212,7 @@ const moodOptions = [
         icon: XCircle,
         label: "Bored",
         value: "bored",
-        gradient: "from-[#e5e7eb] via-[#cbd5f5] to-[#d1d5db]",
+        gradient: "from-[var(--cm-bored-from)] via-[var(--cm-bored-via)] to-[var(--cm-bored-to)]",
         iconTone: "text-slate-500",
         tagline: "Low motivation",
     },
@@ -220,7 +220,7 @@ const moodOptions = [
         icon: Shuffle,
         label: "Scattered",
         value: "scattered",
-        gradient: "from-[#c7d2fe] via-[#a5b4fc] to-[#fbcfe8]",
+        gradient: "from-[var(--cm-scattered-from)] via-[var(--cm-scattered-via)] to-[var(--cm-scattered-to)]",
         iconTone: "text-indigo-500",
         tagline: "Hard to focus",
     },
@@ -407,7 +407,7 @@ const EmotionalCheckinPage = memo(function EmotionalCheckinPage() {
                                 >
                                     <div
                                         className={`flex items-center gap-3 rounded-2xl border px-4 py-3 ${checkinStatus.hasManualCheckin
-                                            ? "bg-emerald-50/80 border-emerald-200/70 text-emerald-700"
+                                            ? "bg-emerald-50/80 dark:bg-emerald-900/20 border-emerald-200/70 dark:border-emerald-700/40 text-emerald-700 dark:text-emerald-300"
                                             : "bg-white/70 dark:bg-white/10 border-white/70 dark:border-white/10 text-muted-foreground"
                                             }`}
                                     >
@@ -425,7 +425,7 @@ const EmotionalCheckinPage = memo(function EmotionalCheckinPage() {
                                     </div>
                                     <div
                                         className={`flex items-center gap-3 rounded-2xl border px-4 py-3 ${checkinStatus.hasAICheckin
-                                            ? "bg-emerald-50/80 border-emerald-200/70 text-emerald-700"
+                                            ? "bg-emerald-50/80 dark:bg-emerald-900/20 border-emerald-200/70 dark:border-emerald-700/40 text-emerald-700 dark:text-emerald-300"
                                             : "bg-white/70 dark:bg-white/10 border-white/70 dark:border-white/10 text-muted-foreground"
                                             }`}
                                     >
@@ -473,7 +473,7 @@ const EmotionalCheckinPage = memo(function EmotionalCheckinPage() {
                                         }`}
                                 >
                                     <div
-                                        className={`absolute inset-0 bg-gradient-to-br from-[#ff9ad5] via-[#ffd1a3] to-[#7dd3fc] ${activeMode === "manual"
+                                        className={`absolute inset-0 bg-gradient-to-br from-[var(--checkin-btn-manual-from)] via-[var(--checkin-btn-manual-via)] to-[var(--checkin-btn-manual-to)] ${activeMode === "manual"
                                             ? "opacity-90"
                                             : "opacity-0 group-hover:opacity-70"
                                             } transition-opacity duration-300`}
@@ -516,7 +516,7 @@ const EmotionalCheckinPage = memo(function EmotionalCheckinPage() {
                                         }`}
                                 >
                                     <div
-                                        className={`absolute inset-0 bg-gradient-to-br from-[#60a5fa] via-[#a78bfa] to-[#fbcfe8] ${activeMode === "ai"
+                                        className={`absolute inset-0 bg-gradient-to-br from-[var(--checkin-btn-ai-from)] via-[var(--checkin-btn-ai-via)] to-[var(--checkin-btn-ai-to)] ${activeMode === "ai"
                                             ? "opacity-90"
                                             : "opacity-0 group-hover:opacity-70"
                                             } transition-opacity duration-300`}
@@ -746,7 +746,7 @@ const EmotionalCheckinPage = memo(function EmotionalCheckinPage() {
                                     <Button
                                         onClick={handleSubmit}
                                         disabled={!selectedWeather || selectedMoods.length === 0 || isSubmitting || (checkinStatus && checkinStatus.hasManualCheckin)}
-                                        className="w-full justify-center rounded-full bg-gradient-to-r from-[#ff58c2] via-[#ffb347] to-[#7dd3fc] text-white font-semibold shadow-[0_18px_45px_rgba(255,88,194,0.25)] transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed"
+                                        className="w-full justify-center rounded-full bg-gradient-to-r from-[var(--checkin-btn-submit-from)] via-[var(--checkin-btn-submit-via)] to-[var(--checkin-btn-submit-to)] text-white font-semibold shadow-[0_18px_45px_rgba(255,88,194,0.25)] transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed"
                                     >
                                         {isSubmitting ? (
                                             <Save className="w-4 h-4 mr-2 animate-spin" />
@@ -822,7 +822,7 @@ const EmotionalCheckinPage = memo(function EmotionalCheckinPage() {
                                         onTouchStart={prefetchStaffFaceScanOnIntent}
                                         onClick={() => navigate('/emotional-checkin/face-scan')}
                                         disabled={checkinStatus && checkinStatus.hasAICheckin}
-                                        className="w-full justify-center rounded-full bg-gradient-to-r from-[#22d3ee] via-[#3b82f6] to-[#a855f7] text-white font-semibold shadow-[0_18px_45px_rgba(59,130,246,0.25)] transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed"
+                                        className="w-full justify-center rounded-full bg-gradient-to-r from-[var(--checkin-btn-chat-from)] via-[var(--checkin-btn-chat-via)] to-[var(--checkin-btn-chat-to)] text-white font-semibold shadow-[0_18px_45px_rgba(59,130,246,0.25)] transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed"
                                     >
                                         <Brain className="w-4 h-4 mr-2" />
                                         <Camera className="w-4 h-4 mr-2" />

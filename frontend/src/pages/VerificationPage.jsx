@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet";
-import { Shield } from "lucide-react";
+import { Shield, AlertCircle, RefreshCcw } from "lucide-react";
 import AnimatedPage from "@/components/AnimatedPage";
 import { useToast } from "@/components/ui/use-toast";
 import IntroSection from "@/components/emotion-scan/IntroSection";
@@ -34,9 +34,11 @@ const EmotionalCheckinFaceScanPage = memo(() => {
         detectedFeatures,
         startScan,
         capturePhoto,
+        handleCameraError,
         handleRescanRequest,
         isRescanDisabled,
-        remainingRescans
+        remainingRescans,
+        cameraError
     } = useCameraScanner({
         toast,
         maxRescanAttempts: MAX_AI_RESCAN_ATTEMPTS
@@ -59,19 +61,11 @@ const EmotionalCheckinFaceScanPage = memo(() => {
     });
 
     const handleTakePhoto = useCallback(async () => {
-        const photoDataUrl = await capturePhoto();
-        if (photoDataUrl) {
-            await analyzePhoto(photoDataUrl);
+        const photoSource = await capturePhoto();
+        if (photoSource) {
+            await analyzePhoto(photoSource);
         }
     }, [analyzePhoto, capturePhoto]);
-
-    const handleCameraError = useCallback(() => {
-        toast({
-            title: "Camera Access Required",
-            description: "Please allow camera access so the AI scan can start.",
-            variant: "destructive"
-        });
-    }, [toast]);
 
     const handleRescan = useCallback(() => {
         setAnalysis(null);
@@ -148,6 +142,45 @@ const EmotionalCheckinFaceScanPage = memo(() => {
                                         onCameraError={handleCameraError}
                                         stage={stage}
                                     />
+                                )}
+                                {stage === "camera-error" && (
+                                    <motion.div
+                                        key="camera-error"
+                                        initial={{ opacity: 0, y: 12 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0 }}
+                                        className="text-center space-y-5"
+                                    >
+                                        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+                                            <AlertCircle className="h-7 w-7" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <h2 className="text-lg font-bold text-foreground">Camera needs permission</h2>
+                                            <p className="text-sm text-muted-foreground">
+                                                Allow camera access, close other apps using the camera, then try again.
+                                            </p>
+                                            {cameraError?.name && (
+                                                <p className="text-xs text-muted-foreground">Error: {cameraError.name}</p>
+                                            )}
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => navigate("/emotional-checkin")}
+                                                className="w-full px-4 py-3 rounded-lg border border-border bg-background text-sm font-semibold hover:bg-muted transition-colors"
+                                            >
+                                                Back
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={startScan}
+                                                className="w-full px-4 py-3 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                <RefreshCcw className="w-4 h-4" />
+                                                Try Again
+                                            </button>
+                                        </div>
+                                    </motion.div>
                                 )}
                                 {stage === "analyzing" && <AnalyzingSection />}
                                 {stage === "results" && analysisForView && (

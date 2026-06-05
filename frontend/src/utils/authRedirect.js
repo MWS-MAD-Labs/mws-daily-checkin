@@ -1,3 +1,5 @@
+import { hasMtssAccess } from "@/utils/mtssAccess";
+
 const PENDING_AUTH_REDIRECT_KEY = "pending_auth_redirect";
 
 export const sanitizeRedirectPath = (value) => {
@@ -42,8 +44,13 @@ export const getDefaultPostLoginPath = (userOrRole) => {
     const normalizedRole = String(user?.role || userOrRole || "").trim().toLowerCase();
 
     if (normalizedRole === "student") {
-        return "/student/emotional-checkin";
+        return "/student/support-hub";
     }
 
+    if (hasMtssAccess(user || { role: normalizedRole })) {
+        return "/support-hub";
+    }
+
+    // staff, support_staff, and other non-MTSS roles go directly to check-in method selection
     return "/select-role";
 };

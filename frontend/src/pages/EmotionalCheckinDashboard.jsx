@@ -271,6 +271,9 @@ const EmotionalCheckinDashboard = memo(function EmotionalCheckinDashboard() {
     const [summaryOpen, setSummaryOpen] = useState(false);
     const handleSummaryClick = useCallback(() => setSummaryOpen(true), []);
     const handleSummaryClose = useCallback(() => setSummaryOpen(false), []);
+    const handleSupportRequestUpdated = useCallback(() => {
+        dispatch(fetchDashboardStats({ period: selectedPeriod, date: resolvedDateFilter, force: true }));
+    }, [dispatch, resolvedDateFilter, selectedPeriod]);
 
     return (
         <div className="min-h-screen text-foreground relative overflow-hidden">
@@ -342,6 +345,7 @@ const EmotionalCheckinDashboard = memo(function EmotionalCheckinDashboard() {
                             userId={user?.id}
                             isHeadUnit={isHeadUnit}
                             isDirectorate={isDirectorate}
+                            onSupportRequestUpdated={handleSupportRequestUpdated}
                         />
                     </Suspense>
                 )}

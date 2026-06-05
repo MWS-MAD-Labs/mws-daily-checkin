@@ -330,6 +330,8 @@ const ResultsSection = memo(({
 }) => {
     const [hasReflection, setHasReflection] = useState(false);
     const [showNotification, setShowNotification] = useState(false);
+    const [isCompleting, setIsCompleting] = useState(false);
+    const isSubmitLocked = isCompleting || Boolean(analysis?.isSubmitting);
 
     useEffect(() => {
         // Disable AOS animations for better performance
@@ -547,13 +549,16 @@ const ResultsSection = memo(({
 
                     <button
                         onClick={() => {
+                            if (isSubmitLocked) return;
+
                             if (!hasReflection) {
                                 setShowNotification(true);
                                 setTimeout(() => setShowNotification(false), 5000);
                                 return;
                             }
 
-                            // Trigger confetti animation
+                            setIsCompleting(true);
+
                             const duration = 3000;
                             const animationEnd = Date.now() + duration;
                             const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 9999 };
@@ -581,19 +586,21 @@ const ResultsSection = memo(({
                                 });
                             }, 250);
 
-                            onComplete();
+                            Promise.resolve(onComplete?.()).catch(() => {
+                                setIsCompleting(false);
+                            });
                         }}
-                        disabled={analysis?.isSubmitting}
+                        disabled={isSubmitLocked}
                         className={cn(
                             "py-4 sm:py-5 rounded-xl sm:rounded-2xl text-sm sm:text-base font-bold transition-all duration-300",
-                            analysis?.isSubmitting
+                            isSubmitLocked
                                 ? "bg-white/40 cursor-wait"
                                 : !hasReflection
                                 ? "bg-white/50 text-emerald-600/70 cursor-not-allowed"
                                 : "bg-white text-emerald-600 hover:bg-white/95 active:scale-95 sm:hover:scale-105"
                         )}
                     >
-                        {analysis?.isSubmitting ? (
+                        {isSubmitLocked ? (
                             <div className="flex items-center justify-center gap-2">
                                 <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-emerald-600/30 border-t-emerald-600 rounded-full animate-spin" />
                                 <span>Processing...</span>

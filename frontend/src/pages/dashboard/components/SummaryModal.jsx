@@ -85,9 +85,9 @@ const SummaryModal = memo(({ isOpen, onClose, data, period, isHeadUnit, isDirect
     const periodLabel = { today: 'Today', week: 'This Week', month: 'This Month', semester: 'This Semester', all: 'All Time' }[period] || period;
 
     const getHealthColor = (score) => {
-        if (score >= 75) return 'text-emerald-600';
-        if (score >= 50) return 'text-amber-600';
-        return 'text-red-600';
+        if (score >= 75) return 'text-emerald-600 dark:text-emerald-400';
+        if (score >= 50) return 'text-amber-600 dark:text-amber-400';
+        return 'text-red-600 dark:text-red-400';
     };
 
     const getHealthBg = (score) => {
@@ -152,10 +152,8 @@ const SummaryModal = memo(({ isOpen, onClose, data, period, isHeadUnit, isDirect
                                     {getHealthLabel(summary.healthScore)}
                                 </p>
                             </div>
-                            <div className="w-16 h-16 rounded-full border-4 border-current flex items-center justify-center"
-                                style={{ borderColor: summary.healthScore >= 75 ? '#10b981' : summary.healthScore >= 50 ? '#d97706' : '#ef4444' }}
-                            >
-                                <Heart className="w-7 h-7" style={{ color: summary.healthScore >= 75 ? '#10b981' : summary.healthScore >= 50 ? '#d97706' : '#ef4444' }} />
+                            <div className={`w-16 h-16 rounded-full border-4 flex items-center justify-center ${summary.healthScore >= 75 ? 'border-emerald-500 dark:border-emerald-400' : summary.healthScore >= 50 ? 'border-amber-500 dark:border-amber-400' : 'border-red-500 dark:border-red-400'}`}>
+                                <Heart className={`w-7 h-7 ${summary.healthScore >= 75 ? 'text-emerald-500 dark:text-emerald-400' : summary.healthScore >= 50 ? 'text-amber-500 dark:text-amber-400' : 'text-red-500 dark:text-red-400'}`} />
                             </div>
                         </div>
                         <p className="text-[10px] text-muted-foreground mt-2">
@@ -166,22 +164,22 @@ const SummaryModal = memo(({ isOpen, onClose, data, period, isHeadUnit, isDirect
                     {/* Key Metrics Grid */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         <div className="rounded-xl border border-border/40 p-3 bg-card/50">
-                            <Users className="w-4 h-4 text-blue-500 mb-1" />
+                            <Users className="w-4 h-4 text-blue-500 dark:text-blue-400 mb-1" />
                             <p className="text-xl font-bold">{summary.participationRate}%</p>
                             <p className="text-[10px] text-muted-foreground">Participation</p>
                         </div>
                         <div className="rounded-xl border border-border/40 p-3 bg-card/50">
-                            <TrendingUp className="w-4 h-4 text-emerald-500 mb-1" />
+                            <TrendingUp className="w-4 h-4 text-emerald-500 dark:text-emerald-400 mb-1" />
                             <p className="text-xl font-bold">{summary.readiness}%</p>
                             <p className="text-[10px] text-muted-foreground">Readiness</p>
                         </div>
                         <div className="rounded-xl border border-border/40 p-3 bg-card/50">
-                            <Activity className="w-4 h-4 text-violet-500 mb-1" />
+                            <Activity className="w-4 h-4 text-violet-500 dark:text-violet-400 mb-1" />
                             <p className="text-xl font-bold">{summary.avgPresence}</p>
                             <p className="text-[10px] text-muted-foreground">Avg Presence</p>
                         </div>
                         <div className="rounded-xl border border-border/40 p-3 bg-card/50">
-                            <Zap className="w-4 h-4 text-amber-500 mb-1" />
+                            <Zap className="w-4 h-4 text-amber-500 dark:text-amber-400 mb-1" />
                             <p className="text-xl font-bold">{summary.avgCapacity}</p>
                             <p className="text-[10px] text-muted-foreground">Avg Capacity</p>
                         </div>

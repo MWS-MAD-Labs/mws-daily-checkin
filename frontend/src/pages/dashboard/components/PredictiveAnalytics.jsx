@@ -137,7 +137,7 @@ const PredictiveAnalytics = memo(({ data = {} }) => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                     <div className="glass glass-card p-4">
                         <div className="flex items-center gap-2 mb-2">
-                            <Clock className="w-4 h-4 text-blue-500" />
+                            <Clock className="w-4 h-4 text-blue-500 dark:text-blue-400" />
                             <span className="text-sm font-medium text-foreground">Next Week Mood</span>
                         </div>
                         <p className="text-lg font-bold text-foreground capitalize">
@@ -148,7 +148,7 @@ const PredictiveAnalytics = memo(({ data = {} }) => {
 
                     <div className="glass glass-card p-4">
                         <div className="flex items-center gap-2 mb-2">
-                            <TrendingUp className="w-4 h-4 text-purple-500" />
+                            <TrendingUp className="w-4 h-4 text-purple-500 dark:text-purple-400" />
                             <span className="text-sm font-medium text-foreground">Weather Pattern</span>
                         </div>
                         <p className="text-lg font-bold text-foreground capitalize">
@@ -159,7 +159,7 @@ const PredictiveAnalytics = memo(({ data = {} }) => {
 
                     <div className="glass glass-card p-4">
                         <div className="flex items-center gap-2 mb-2">
-                            <AlertTriangle className="w-4 h-4 text-orange-500" />
+                            <AlertTriangle className="w-4 h-4 text-orange-500 dark:text-orange-400" />
                             <span className="text-sm font-medium text-foreground">Support Trend</span>
                         </div>
                         <p className="text-lg font-bold text-foreground capitalize">

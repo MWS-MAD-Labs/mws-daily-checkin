@@ -40,10 +40,10 @@ const buildSparklinePoints = (trend = [], key = "presence") => {
         .join(" ");
 };
 const moodTone = {
-    positive: "bg-emerald-100 text-emerald-700",
-    balanced: "bg-sky-100 text-sky-700",
-    depleted: "bg-amber-100 text-amber-700",
-    challenging: "bg-rose-100 text-rose-700"
+    positive: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300",
+    balanced: "bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300",
+    depleted: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300",
+    challenging: "bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300"
 };
 
 const StudentCheckinInsightCard = memo(({ student }) => {
@@ -73,24 +73,24 @@ const StudentCheckinInsightCard = memo(({ student }) => {
                     <div className="flex flex-wrap items-center gap-2">
                         {checkin ? (
                             <>
-                                <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+                                <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">
                                     {toTitleCase(checkin?.weatherType || "Submitted")}
                                 </span>
-                                <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-sky-100 text-sky-700">
+                                <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300">
                                     P {checkin?.presenceLevel ?? "-"} / C {checkin?.capacityLevel ?? "-"}
                                 </span>
                                 <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${moodTone[moodState] || moodTone.balanced}`}>
                                     {toTitleCase(moodState)}
                                 </span>
                                 {checkin?.aiAnalysis?.needsSupport && (
-                                    <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-rose-100 text-rose-700 inline-flex items-center gap-1">
+                                    <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 inline-flex items-center gap-1">
                                         <AlertTriangle className="w-3 h-3" />
                                         Needs support
                                     </span>
                                 )}
                             </>
                         ) : (
-                            <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                            <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">
                                 Not submitted
                             </span>
                         )}

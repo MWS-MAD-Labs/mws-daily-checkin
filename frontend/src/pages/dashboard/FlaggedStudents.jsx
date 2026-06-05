@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useMemo, useState, useCallback } from "react";
+import { memo, useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle, Users, Brain } from "lucide-react";
 import MoodIcon from "./MoodIcon";
@@ -91,7 +91,19 @@ const FlaggedUsers = memo(({
                                     <div className="flex-1 min-w-0">
                                         <button
                                             className="font-semibold text-foreground text-left truncate hover:text-primary/80"
-                                            onClick={() => navigate(`/emotional-wellness/${user.raw?.userId || user.id}`)}
+                                            onClick={() => navigate(`/emotional-wellness/${user.raw?.userId || user.id}`, {
+                                                state: {
+                                                    user: {
+                                                        id: user.raw?.userId || user.id,
+                                                        name: user.name,
+                                                        role: user.role,
+                                                        department: user.department,
+                                                        unit: user.unit,
+                                                        email: user.email
+                                                    },
+                                                    fromDashboard: true
+                                                }
+                                            })}
                                         >
                                             {user.name}
                                         </button>

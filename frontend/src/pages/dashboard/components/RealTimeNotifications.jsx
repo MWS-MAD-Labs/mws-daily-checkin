@@ -16,9 +16,9 @@ const RealTimeNotifications = memo(({ socketService, user }) => {
                 message: `${data.userName || 'Someone'} just submitted their emotional check-in`,
                 timestamp: new Date(),
                 icon: CheckCircle,
-                color: 'text-blue-500',
-                bgColor: 'bg-blue-50',
-                borderColor: 'border-blue-200'
+                color: 'text-blue-500 dark:text-blue-400',
+                bgColor: 'bg-blue-50 dark:bg-blue-900/20',
+                borderColor: 'border-blue-200 dark:border-blue-700/50'
             };
             addNotification(notification);
         };
@@ -31,9 +31,9 @@ const RealTimeNotifications = memo(({ socketService, user }) => {
                 message: `${data.userName} has indicated they need support`,
                 timestamp: new Date(),
                 icon: AlertTriangle,
-                color: 'text-red-500',
-                bgColor: 'bg-red-50',
-                borderColor: 'border-red-200'
+                color: 'text-red-500 dark:text-red-400',
+                bgColor: 'bg-red-50 dark:bg-red-900/20',
+                borderColor: 'border-red-200 dark:border-red-700/50'
             };
             addNotification(notification);
         };
@@ -46,9 +46,9 @@ const RealTimeNotifications = memo(({ socketService, user }) => {
                 message: 'New data has been added to the dashboard',
                 timestamp: new Date(),
                 icon: CheckCircle,
-                color: 'text-green-500',
-                bgColor: 'bg-green-50',
-                borderColor: 'border-green-200'
+                color: 'text-green-500 dark:text-green-400',
+                bgColor: 'bg-green-50 dark:bg-green-900/20',
+                borderColor: 'border-green-200 dark:border-green-700/50'
             };
             addNotification(notification);
         };

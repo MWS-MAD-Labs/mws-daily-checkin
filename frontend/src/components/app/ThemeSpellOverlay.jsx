@@ -1,7 +1,9 @@
 import React, { memo, useEffect, useMemo, useState } from 'react';
 import { Sparkles, WandSparkles } from 'lucide-react';
+import { useSelector } from 'react-redux';
 import usePreferLowMotion from '@/hooks/usePreferLowMotion';
 import { THEME_SPELL_EVENT } from '@/lib/theme';
+import { selectAssistantProfile } from '@/store/slices/aiChatSlice';
 
 const SPELL_LAYOUT = [
     { angle: -42, distance: 54, delay: 0.02 },
@@ -18,7 +20,12 @@ const clampPercent = (value) => Math.max(8, Math.min(92, value));
 
 const ThemeSpellOverlay = memo(() => {
     const lowMotion = usePreferLowMotion();
-    const assistantName = useMemo(() => 'Assistant', []);
+    const assistantProfile = useSelector(selectAssistantProfile);
+    const assistantName = useMemo(() => {
+        const name = assistantProfile?.assistant?.assistantName;
+        if (typeof name === 'string' && name.trim().length > 0) return name.trim();
+        return 'AI Assistant';
+    }, [assistantProfile]);
 
     const [spellState, setSpellState] = useState({
         active: false,

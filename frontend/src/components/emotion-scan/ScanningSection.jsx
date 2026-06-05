@@ -1,4 +1,4 @@
-import React, { memo, useEffect } from "react";
+import React, { memo, useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Brain, CheckCircle } from "lucide-react";
 import Webcam from "react-webcam";
@@ -23,20 +23,32 @@ const ScanningOverlay = memo(() => (
     </motion.div>
 ));
 
-const ScanningSection = memo(({ videoRef, scanProgress, detectedFeatures, onTakePhoto, stage, onCameraError }) => {
+const ScanningSection = memo(({ videoRef, scanProgress, detectedFeatures, onTakePhoto, onCameraError, stage }) => {
+    const [cameraReady, setCameraReady] = useState(false);
     const webcamRef = React.useRef(null);
-    const bindVideoElement = React.useCallback(() => {
-        if (webcamRef?.current?.video && videoRef) {
-            videoRef.current = webcamRef.current.video;
-            console.log('📹 Video element assigned to ref');
+
+    const bindVideoElement = useCallback(() => {
+        const video = webcamRef.current?.video;
+        if (video && videoRef) {
+            videoRef.current = video;
+            setCameraReady(video.videoWidth > 0 && video.videoHeight > 0);
         }
     }, [videoRef]);
 
     useEffect(() => {
-        bindVideoElement();
-    }, [bindVideoElement]);
+        if (stage === "preview" || stage === "scanning") {
+            bindVideoElement();
+            return;
+        }
+        setCameraReady(false);
+    }, [bindVideoElement, stage]);
 
-    if (stage === 'preview') {
+    const handleTakePhoto = useCallback(() => {
+        if (!cameraReady) return;
+        onTakePhoto?.();
+    }, [cameraReady, onTakePhoto]);
+
+    if (stage === "preview") {
         return (
             <motion.div
                 key="preview"
@@ -61,8 +73,9 @@ const ScanningSection = memo(({ videoRef, scanProgress, detectedFeatures, onTake
                         mirrored
                         videoConstraints={{ facingMode: "user" }}
                         onUserMedia={bindVideoElement}
-                        onLoadedMetadata={bindVideoElement}
                         onUserMediaError={onCameraError}
+                        onLoadedMetadata={bindVideoElement}
+                        onCanPlay={bindVideoElement}
                         style={{ width: "100%", height: "100%" }}
                     />
                 </div>
@@ -72,10 +85,11 @@ const ScanningSection = memo(({ videoRef, scanProgress, detectedFeatures, onTake
                         When you're ready, we'll take a photo for emotion analysis
                     </p>
                     <button
-                        onClick={onTakePhoto}
-                        className="w-full px-6 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
+                        onClick={handleTakePhoto}
+                        disabled={!cameraReady}
+                        className="w-full px-6 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        I'm Ready - Take Photo
+                        {cameraReady ? "I'm Ready - Take Photo" : "Preparing camera..."}
                     </button>
                 </div>
             </motion.div>
@@ -109,8 +123,9 @@ const ScanningSection = memo(({ videoRef, scanProgress, detectedFeatures, onTake
                     mirrored
                     videoConstraints={{ facingMode: "user" }}
                     onUserMedia={bindVideoElement}
-                    onLoadedMetadata={bindVideoElement}
                     onUserMediaError={onCameraError}
+                    onLoadedMetadata={bindVideoElement}
+                    onCanPlay={bindVideoElement}
                     style={{ width: "100%", height: "100%" }}
                 />
                 <ScanningOverlay />
@@ -152,8 +167,8 @@ const ScanningSection = memo(({ videoRef, scanProgress, detectedFeatures, onTake
                 Advanced AI analysis in progress...
             </div>
         </motion.div>
-    )
+    );
 });
 
-ScanningSection.displayName = 'ScanningSection';
+ScanningSection.displayName = "ScanningSection";
 export default ScanningSection;

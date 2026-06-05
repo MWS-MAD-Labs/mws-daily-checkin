@@ -1,12 +1,13 @@
 import { memo, useMemo, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Users, AlertTriangle, Search, ArrowUpRight, TrendingUp, Activity, Clock } from "lucide-react";
+import { Users, AlertTriangle, Search, ArrowUpRight, TrendingUp, Activity, Clock, MessageCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card";
 import { Badge } from "../../../components/ui/badge";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
 import UserDetailModal from "./UserDetailModal";
 import { formatCalendarDateKey, formatCalendarDateLabel, getTodayCalendarDateKey, parseCalendarDate } from "../utils/calendarDate";
+import { isTerminalStatus, normalizeRequestStatus, STATUS_LABELS } from "./checkin-requests/checkinRequestUtils";
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
@@ -33,7 +34,14 @@ const formatScore = (score) => {
     return `${Math.round(score * 10) / 10}/10`;
 };
 
-const HeadUnitStaffPanel = memo(({ staff = [], summary, isDirectorate = false }) => {
+const resolveMemberId = (member) => (
+    member?.id?.toString?.() ||
+    member?._id?.toString?.() ||
+    member?.userId?.toString?.() ||
+    ""
+);
+
+const HeadUnitStaffPanel = memo(({ staff = [], summary, isDirectorate = false, supportRequests = [], onFocusSupportRequest }) => {
     const navigate = useNavigate();
     const [search, setSearch] = useState('');
     const [detailUser, setDetailUser] = useState(null);
@@ -46,41 +54,77 @@ const HeadUnitStaffPanel = memo(({ staff = [], summary, isDirectorate = false })
         return `Active on ${formatCalendarDateLabel(referenceDateKey, { month: "short", day: "numeric" })}`;
     }, [summary?.referenceDateKey]);
 
+    const supportRequestByUserId = useMemo(() => {
+        const requestsByUser = new Map();
+        supportRequests.forEach((request) => {
+            if (!request?.userId) return;
+            const status = normalizeRequestStatus(request.status);
+            if (isTerminalStatus(status)) return;
+
+            const key = request.userId.toString();
+            const existing = requestsByUser.get(key);
+            const existingTime = existing?.submittedAt ? new Date(existing.submittedAt).getTime() : 0;
+            const requestTime = request.submittedAt ? new Date(request.submittedAt).getTime() : 0;
+
+            if (!existing || requestTime >= existingTime) {
+                requestsByUser.set(key, { ...request, status });
+            }
+        });
+        return requestsByUser;
+    }, [supportRequests]);
+
+    const staffWithSupportRequests = useMemo(() => (
+        staff.map((member) => ({
+            ...member,
+            activeSupportRequest: supportRequestByUserId.get(resolveMemberId(member)) || null
+        }))
+    ), [staff, supportRequestByUserId]);
+
     const computedSummary = useMemo(() => {
         if (summary) {
+            const staffFlagged = staffWithSupportRequests.filter(member => {
+                const isHealthyScores = member.lastCheckin?.presenceLevel >= 7 && member.lastCheckin?.capacityLevel >= 7;
+                return member.activeSupportRequest ||
+                    (member.lastCheckin?.needsSupport && !isHealthyScores) ||
+                    (member.periodSummary?.needsSupportDays || 0) > 0;
+            }).length;
+            const summaryFlagged = summary.flaggedMembers ?? 0;
+
             return {
-                total: summary.totalMembers ?? staff.length,
+                total: summary.totalMembers ?? staffWithSupportRequests.length,
                 activeToday: summary.activeToday ?? 0,
-                flagged: summary.flaggedMembers ?? 0,
+                flagged: Math.max(summaryFlagged, staffFlagged),
                 submissions: summary.submittedInPeriod ?? 0
             };
         }
 
         const todayKey = getTodayCalendarDateKey();
-        const activeToday = staff.filter(member => {
+        const activeToday = staffWithSupportRequests.filter(member => {
             const lastDate = member.lastCheckin?.date;
             if (!lastDate) return false;
             const compare = new Date(lastDate);
             compare.setHours(0, 0, 0, 0);
             return formatCalendarDateKey(compare) === todayKey;
         }).length;
-        const flagged = staff.filter(member =>
-            member.lastCheckin?.needsSupport ||
-            (member.periodSummary?.needsSupportDays || 0) > 0
-        ).length;
-        const submissions = staff.filter(member => (member.periodSummary?.submissions || 0) > 0).length;
+        const flagged = staffWithSupportRequests.filter(member => {
+            const isHealthyScores = member.lastCheckin?.presenceLevel >= 7 && member.lastCheckin?.capacityLevel >= 7;
+            return member.activeSupportRequest ||
+                (member.lastCheckin?.needsSupport && !isHealthyScores) ||
+                (member.periodSummary?.needsSupportDays || 0) > 0;
+        }).length;
+        const submissions = staffWithSupportRequests.filter(member => (member.periodSummary?.submissions || 0) > 0).length;
 
         return {
-            total: staff.length,
+            total: staffWithSupportRequests.length,
             activeToday,
             flagged,
             submissions
         };
-    }, [staff, summary]);
+    }, [staffWithSupportRequests, summary]);
 
     const filteredStaff = useMemo(() => {
         if (!search.trim()) {
-            return [...staff].sort((a, b) => {
+            return [...staffWithSupportRequests].sort((a, b) => {
                 const aTime = a.lastCheckin?.date ? new Date(a.lastCheckin.date).getTime() : 0;
                 const bTime = b.lastCheckin?.date ? new Date(b.lastCheckin.date).getTime() : 0;
                 return bTime - aTime;
@@ -88,7 +132,7 @@ const HeadUnitStaffPanel = memo(({ staff = [], summary, isDirectorate = false })
         }
 
         const query = search.trim().toLowerCase();
-        return staff
+        return staffWithSupportRequests
             .filter(member => {
                 const haystack = `${member.name} ${member.email || ''} ${member.department || ''} ${member.unit || ''}`.toLowerCase();
                 return haystack.includes(query);
@@ -98,7 +142,7 @@ const HeadUnitStaffPanel = memo(({ staff = [], summary, isDirectorate = false })
                 const bTime = b.lastCheckin?.date ? new Date(b.lastCheckin.date).getTime() : 0;
                 return bTime - aTime;
             });
-    }, [staff, search]);
+    }, [staffWithSupportRequests, search]);
 
     const handleOpenModal = useCallback((member) => {
         setDetailUser({
@@ -165,9 +209,9 @@ const HeadUnitStaffPanel = memo(({ staff = [], summary, isDirectorate = false })
                         </div>
                         <div className="p-4 bg-card/40 border border-border/40 rounded-xl">
                             <p className="text-xs uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                                <AlertTriangle className="w-3.5 h-3.5 text-red-500" /> Needs Support
+                                <AlertTriangle className="w-3.5 h-3.5 text-red-500 dark:text-red-400" /> Needs Support
                             </p>
-                            <p className="text-2xl font-semibold text-red-500 mt-1">{computedSummary.flagged}</p>
+                            <p className="text-2xl font-semibold text-red-500 dark:text-red-400 mt-1">{computedSummary.flagged}</p>
                         </div>
                     </div>
 
@@ -184,61 +228,84 @@ const HeadUnitStaffPanel = memo(({ staff = [], summary, isDirectorate = false })
                     </div>
 
                     <div className="space-y-3 max-h-[28rem] overflow-auto pr-1">
-                        {filteredStaff.map(member => (
-                            <div
-                                key={member.id || member._id || member.email}
-                                className="flex flex-col lg:flex-row lg:items-center gap-3 p-3 border border-border/40 rounded-xl bg-card/30 hover:bg-card/60 transition-colors"
-                            >
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-semibold text-foreground truncate">{member.name}</p>
-                                    <p className="text-xs text-muted-foreground truncate">
-                                        {member.role} - {member.department || member.unit || 'No unit'}
-                                    </p>
-                                    <p className="text-[11px] text-muted-foreground mt-1">
-                                        Last check-in: {formatRelativeDate(member.lastCheckin?.date)}
-                                    </p>
-                                </div>
-                                <div className="flex flex-wrap items-center gap-2 text-xs">
-                                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30">
-                                        Presence {formatScore(member.periodSummary?.avgPresence ?? member.overallAvgPresence)}
-                                    </Badge>
-                                    <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/30">
-                                        Capacity {formatScore(member.periodSummary?.avgCapacity ?? member.overallAvgCapacity)}
-                                    </Badge>
-                                    {member.lastCheckin?.needsSupport && (
-                                        <Badge variant="destructive" className="flex items-center gap-1">
-                                            <AlertTriangle className="w-3 h-3" /> Needs support
+                        {filteredStaff.map(member => {
+                            const activeRequest = member.activeSupportRequest;
+                            const requestStatusLabel = activeRequest
+                                ? STATUS_LABELS[activeRequest.status] || "Needs Follow-up"
+                                : null;
+
+                            return (
+                                <div
+                                    key={member.id || member._id || member.email}
+                                    className="flex flex-col lg:flex-row lg:items-center gap-3 p-3 border border-border/40 rounded-xl bg-card/30 hover:bg-card/60 transition-colors"
+                                >
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-semibold text-foreground truncate">{member.name}</p>
+                                        <p className="text-xs text-muted-foreground truncate">
+                                            {member.role} - {member.department || member.unit || 'No unit'}
+                                        </p>
+                                        <p className="text-[11px] text-muted-foreground mt-1">
+                                            Last check-in: {formatRelativeDate(member.lastCheckin?.date)}
+                                        </p>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30">
+                                            Presence {formatScore(member.periodSummary?.avgPresence ?? member.overallAvgPresence)}
                                         </Badge>
-                                    )}
-                                    {member.periodSummary?.submissions > 0 && (
-                                        <Badge variant="secondary" className="flex items-center gap-1">
-                                            <Activity className="w-3 h-3" /> {member.periodSummary.submissions} in period
+                                        <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/30">
+                                            Capacity {formatScore(member.periodSummary?.avgCapacity ?? member.overallAvgCapacity)}
                                         </Badge>
-                                    )}
+                                        {activeRequest && (
+                                            <Badge variant="outline" className="flex items-center gap-1 bg-rose-500/10 text-rose-500 border-rose-500/30">
+                                                <MessageCircle className="w-3 h-3" /> {requestStatusLabel}
+                                            </Badge>
+                                        )}
+                                        {!activeRequest && member.lastCheckin?.needsSupport &&
+                                         !(member.lastCheckin?.presenceLevel >= 7 && member.lastCheckin?.capacityLevel >= 7) && (
+                                            <Badge variant="destructive" className="flex items-center gap-1">
+                                                <AlertTriangle className="w-3 h-3" /> Needs support
+                                            </Badge>
+                                        )}
+                                        {member.periodSummary?.submissions > 0 && (
+                                            <Badge variant="secondary" className="flex items-center gap-1">
+                                                <Activity className="w-3 h-3" /> {member.periodSummary.submissions} in period
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {activeRequest && (
+                                            <Button
+                                                variant="default"
+                                                size="sm"
+                                                onClick={() => onFocusSupportRequest?.(activeRequest.id)}
+                                                className="flex items-center gap-1"
+                                            >
+                                                Handle support <MessageCircle className="w-3.5 h-3.5" />
+                                            </Button>
+                                        )}
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleOpenModal(member)}
+                                            className="flex items-center gap-1"
+                                        >
+                                            Quick view <ArrowUpRight className="w-3.5 h-3.5" />
+                                        </Button>
+                                        <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            onClick={() =>
+                                                navigate(`/emotional-wellness/${member.id || member._id}`, {
+                                                    state: { user: member, fromDashboard: true }
+                                                })
+                                            }
+                                        >
+                                            Full report
+                                        </Button>
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handleOpenModal(member)}
-                                        className="flex items-center gap-1"
-                                    >
-                                        Quick view <ArrowUpRight className="w-3.5 h-3.5" />
-                                    </Button>
-                                    <Button
-                                        variant="secondary"
-                                        size="sm"
-                                        onClick={() =>
-                                            navigate(`/emotional-wellness/${member.id || member._id}`, {
-                                                state: { user: member }
-                                            })
-                                        }
-                                    >
-                                        Full report
-                                    </Button>
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </CardContent>
             </Card>

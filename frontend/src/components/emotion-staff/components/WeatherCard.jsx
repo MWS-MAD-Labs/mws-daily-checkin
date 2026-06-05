@@ -13,9 +13,16 @@ const COLOR_TOKENS = {
 };
 
 const ICON_COLOR_MAP = {
-    Sun: "#F59E0B", Cloud: "#9CA3AF", CloudRain: "#0EA5E9", Zap: "#F97316", Tornado: "#6B7280",
-    Snowflake: "#60A5FA", Rainbow: "linear-gradient(45deg,#ff4bd3,#7a5cff,#16f3b1)", CloudFog: "#9CA3AF",
-    Wind: "#06B6D4", Flame: "#FB923C"
+    Sun:       "var(--ci-sun)",
+    Cloud:     "var(--ci-cloud)",
+    CloudRain: "var(--ci-cloud-rain)",
+    Zap:       "var(--ci-zap)",
+    Tornado:   "var(--ci-tornado)",
+    Snowflake: "var(--ci-snowflake)",
+    Rainbow:   "rainbow-gradient",
+    CloudFog:  "var(--ci-cloud-fog)",
+    Wind:      "var(--ci-wind)",
+    Flame:     "var(--ci-flame)",
 };
 
 const WeatherIcon = memo(({ Icon, iconClasses, iconStyle }) => (
@@ -66,7 +73,7 @@ const WeatherCard = memo(function WeatherCard({ weather, isSelected, onClick, in
     const iconStyle = useMemo(() => {
         const raw = ICON_COLOR_MAP[weather.icon];
         if (!raw) return undefined;
-        if (raw.startsWith("linear-gradient")) return { color: "#A78BFA" };
+        if (raw === "rainbow-gradient") return { color: "var(--ci-rainbow)" };
         return { color: raw };
     }, [weather.icon]);
 

@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet";
-import { Shield, Camera, Brain, CheckCircle, ArrowLeft, Sparkles } from "lucide-react";
+import { Shield, Camera, Brain, CheckCircle, ArrowLeft, Sparkles, AlertCircle, RefreshCcw } from "lucide-react";
 import Webcam from "react-webcam";
 import AnimatedPage from "@/components/AnimatedPage";
 import { useToast } from "@/components/ui/use-toast";
@@ -16,7 +16,6 @@ import "@/pages/styles/student-ios-system.css";
 
 const MAX_AI_RESCAN_ATTEMPTS = 2;
 
-/* Scoped styles matching Hub design */
 const ScanStyles = memo(() => (
     <style>{`
         @keyframes sfBgShift{0%{background-position:0% 0%}25%{background-position:50% 100%}50%{background-position:100% 50%}75%{background-position:50% 0%}100%{background-position:0% 0%}}
@@ -34,21 +33,19 @@ const ScanStyles = memo(() => (
 ));
 ScanStyles.displayName = "ScanStyles";
 
-/* Particles for the scan page */
 const sfParticles = [
-    { top: '5%', left: '8%', sz: 7, cl: 'bg-rose-300 dark:bg-rose-500/25', dur: 4.2 },
-    { top: '12%', right: '10%', sz: 6, cl: 'bg-violet-300 dark:bg-violet-500/25', dur: 5 },
-    { top: '40%', left: '4%', sz: 8, cl: 'bg-sky-300 dark:bg-sky-500/25', dur: 4.5 },
-    { top: '65%', right: '6%', sz: 5, cl: 'bg-amber-300 dark:bg-amber-500/25', dur: 5.5 },
-    { top: '85%', left: '12%', sz: 6, cl: 'bg-emerald-300 dark:bg-emerald-500/25', dur: 3.8 },
-    { top: '75%', right: '14%', sz: 7, cl: 'bg-pink-300 dark:bg-pink-500/25', dur: 4.8 },
+    { top: "5%", left: "8%", sz: 7, cl: "bg-rose-300 dark:bg-rose-500/25", dur: 4.2 },
+    { top: "12%", right: "10%", sz: 6, cl: "bg-violet-300 dark:bg-violet-500/25", dur: 5 },
+    { top: "40%", left: "4%", sz: 8, cl: "bg-sky-300 dark:bg-sky-500/25", dur: 4.5 },
+    { top: "65%", right: "6%", sz: 5, cl: "bg-amber-300 dark:bg-amber-500/25", dur: 5.5 },
+    { top: "85%", left: "12%", sz: 6, cl: "bg-emerald-300 dark:bg-emerald-500/25", dur: 3.8 },
+    { top: "75%", right: "14%", sz: 7, cl: "bg-pink-300 dark:bg-pink-500/25", dur: 4.8 }
 ];
 
-/* Camera scanning overlay (student-styled) */
 const StudentScanOverlay = memo(() => (
     <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-violet-400 to-transparent shadow-[0_0_8px_rgba(139,92,246,0.4)]" style={{ animation: 'sfScanLine 2.5s linear infinite' }} />
-        <div className="absolute top-1/2 left-1/2 w-14 h-14 border-2 border-violet-400/40 rounded-full" style={{ animation: 'sfRingPulse 2.5s ease-in-out infinite' }} />
+        <div className="absolute left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-violet-400 to-transparent shadow-[0_0_8px_rgba(139,92,246,0.4)]" style={{ animation: "sfScanLine 2.5s linear infinite" }} />
+        <div className="absolute top-1/2 left-1/2 w-14 h-14 border-2 border-violet-400/40 rounded-full" style={{ animation: "sfRingPulse 2.5s ease-in-out infinite" }} />
     </div>
 ));
 
@@ -64,8 +61,8 @@ const StudentFaceScanPage = memo(() => {
 
     const {
         stage, setStage, videoRef, scanProgress, detectedFeatures,
-        capturePhoto, handleRescanRequest,
-        isRescanDisabled, remainingRescans
+        startScan, capturePhoto, handleRescanRequest, handleCameraError,
+        isRescanDisabled, remainingRescans, cameraError
     } = useCameraScanner({ toast, maxRescanAttempts: MAX_AI_RESCAN_ATTEMPTS, autoStart: true });
 
     const {
@@ -78,27 +75,18 @@ const StudentFaceScanPage = memo(() => {
     });
 
     const bindVideoElement = useCallback(() => {
-        if (webcamRef.current?.video && videoRef) {
-            videoRef.current = webcamRef.current.video;
-            setCameraReady(true);
+        const video = webcamRef.current?.video;
+        if (video && videoRef) {
+            videoRef.current = video;
+            setCameraReady(video.videoWidth > 0 && video.videoHeight > 0);
         }
     }, [videoRef]);
 
-    const handleCameraError = useCallback(() => {
-        setCameraReady(false);
-        toast({
-            title: "Camera Access Required",
-            description: "Please allow camera access so the AI scan can start.",
-            variant: "destructive"
-        });
-    }, [toast]);
-
-    // Keep trying to bind video element when preview/scanning renders.
     useEffect(() => {
         if (stage === "preview" || stage === "scanning") {
             bindVideoElement();
         }
-        if (stage === "loading") {
+        if (stage !== "preview" && stage !== "scanning") {
             setCameraReady(false);
         }
     }, [bindVideoElement, stage]);
@@ -113,9 +101,9 @@ const StudentFaceScanPage = memo(() => {
             return;
         }
 
-        const photoDataUrl = await capturePhoto();
-        if (photoDataUrl) {
-            await analyzePhoto(photoDataUrl);
+        const photoSource = await capturePhoto();
+        if (photoSource) {
+            await analyzePhoto(photoSource);
         }
     }, [analyzePhoto, cameraReady, capturePhoto, toast]);
 
@@ -134,6 +122,11 @@ const StudentFaceScanPage = memo(() => {
             };
         });
     }, [setAnalysis]);
+
+    const handleRetryCamera = useCallback(() => {
+        setCameraReady(false);
+        startScan();
+    }, [startScan]);
 
     useEffect(() => {
         if (supportContacts.length === 0 && isAuthenticated) {
@@ -167,23 +160,18 @@ const StudentFaceScanPage = memo(() => {
                 className="sf-bg sf-font student-shell min-h-screen relative overflow-hidden bg-gradient-to-br from-violet-50 via-rose-50 via-50% to-amber-50 dark:from-background dark:via-background dark:to-background"
                 data-student-theme="scan"
             >
-                {/* Dot grid */}
                 <div className="sf-grid absolute inset-0 pointer-events-none" />
 
-                {/* Blobs */}
                 <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                    <div className="absolute -top-20 -right-16 w-80 sm:w-[400px] h-80 sm:h-[400px] rounded-full blur-3xl bg-gradient-to-br from-violet-200/50 via-purple-200/35 to-pink-100/25 dark:from-violet-500/8 dark:via-purple-500/4 dark:to-transparent" style={{ animation: 'sfBlob 10s ease-in-out infinite' }} />
-                    <div className="absolute -bottom-16 -left-16 w-72 sm:w-[360px] h-72 sm:h-[360px] rounded-full blur-3xl bg-gradient-to-br from-rose-200/50 via-orange-200/35 to-amber-100/25 dark:from-rose-500/8 dark:via-orange-500/4 dark:to-transparent" style={{ animation: 'sfBlob 12s ease-in-out infinite', animationDelay: '3s' }} />
-                    <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-64 sm:w-80 h-64 sm:h-80 rounded-full blur-3xl bg-gradient-to-br from-sky-100/40 via-cyan-100/25 to-transparent dark:from-sky-500/5 dark:to-transparent" style={{ animation: 'sfBlob 9s ease-in-out infinite', animationDelay: '1.5s' }} />
+                    <div className="absolute -top-20 -right-16 w-80 sm:w-[400px] h-80 sm:h-[400px] rounded-full blur-3xl bg-gradient-to-br from-violet-200/50 via-purple-200/35 to-pink-100/25 dark:from-violet-500/8 dark:via-purple-500/4 dark:to-transparent" style={{ animation: "sfBlob 10s ease-in-out infinite" }} />
+                    <div className="absolute -bottom-16 -left-16 w-72 sm:w-[360px] h-72 sm:h-[360px] rounded-full blur-3xl bg-gradient-to-br from-rose-200/50 via-orange-200/35 to-amber-100/25 dark:from-rose-500/8 dark:via-orange-500/4 dark:to-transparent" style={{ animation: "sfBlob 12s ease-in-out infinite", animationDelay: "3s" }} />
+                    <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-64 sm:w-80 h-64 sm:h-80 rounded-full blur-3xl bg-gradient-to-br from-sky-100/40 via-cyan-100/25 to-transparent dark:from-sky-500/5 dark:to-transparent" style={{ animation: "sfBlob 9s ease-in-out infinite", animationDelay: "1.5s" }} />
                     {sfParticles.map((p, i) => (
                         <div key={i} className={`absolute rounded-full pointer-events-none ${p.cl}`} style={{ top: p.top, left: p.left, right: p.right, width: p.sz, height: p.sz, animation: `sfFloat ${p.dur}s ease-in-out infinite`, animationDelay: `${i * 0.4}s` }} />
                     ))}
                 </div>
 
-                {/* Content */}
-                <div className={`relative z-10 flex flex-col min-h-screen ${isFullWidth ? 'p-4 sm:p-6' : 'items-center justify-center px-4 pt-8 pb-10 sm:pt-12 sm:pb-16'}`}>
-
-                    {/* Back button (non-results) */}
+                <div className={`relative z-10 flex flex-col min-h-screen ${isFullWidth ? "p-4 sm:p-6" : "items-center justify-center px-4 pt-8 pb-10 sm:pt-12 sm:pb-16"}`}>
                     {!isFullWidth && (
                         <motion.div
                             initial={{ opacity: 0, y: 16 }}
@@ -192,7 +180,7 @@ const StudentFaceScanPage = memo(() => {
                             className={isFullWidth ? "mb-4" : "absolute top-6 left-4 sm:top-8 sm:left-6"}
                         >
                             <button
-                                onClick={() => navigate('/student/emotional-checkin/ai')}
+                                onClick={() => navigate("/student/emotional-checkin/ai")}
                                 className="ios-pill flex h-10 w-10 items-center justify-center rounded-full bg-white/60 dark:bg-white/8 border border-white/80 dark:border-white/10 backdrop-blur-sm hover:shadow-md hover:-translate-y-0.5 active:scale-95 transition-all duration-200"
                                 aria-label="Go back"
                             >
@@ -202,7 +190,6 @@ const StudentFaceScanPage = memo(() => {
                     )}
 
                     <AnimatePresence mode="wait">
-                        {/* Loading / requesting camera */}
                         {stage === "loading" && (
                             <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center space-y-4">
                                 <motion.div animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity, ease: "linear" }} className="w-14 h-14 mx-auto">
@@ -212,10 +199,46 @@ const StudentFaceScanPage = memo(() => {
                             </motion.div>
                         )}
 
-                        {/* Camera Preview - student styled */}
+                        {stage === "camera-error" && (
+                            <motion.div key="camera-error" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="w-full max-w-md text-center space-y-5">
+                                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-100 text-rose-500 dark:bg-rose-500/10">
+                                    <AlertCircle className="h-7 w-7" />
+                                </div>
+                                <div className="space-y-2">
+                                    <h2 className="text-xl sm:text-2xl font-black text-gray-700 dark:text-white">
+                                        Camera needs permission
+                                    </h2>
+                                    <p className="text-[13px] text-gray-400 dark:text-gray-500 font-medium">
+                                        Allow camera access, close other apps using the camera, then try again.
+                                    </p>
+                                    {cameraError?.name && (
+                                        <p className="text-[11px] text-gray-300 dark:text-gray-600 font-semibold">
+                                            Error: {cameraError.name}
+                                        </p>
+                                    )}
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate("/student/emotional-checkin/ai")}
+                                        className="w-full py-3 rounded-2xl bg-white/70 dark:bg-white/8 border border-gray-200/60 dark:border-white/10 text-gray-600 dark:text-gray-300 font-extrabold transition-colors hover:bg-white"
+                                    >
+                                        Back
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleRetryCamera}
+                                        className="w-full py-3 rounded-2xl bg-gradient-to-r from-violet-500 via-purple-500 to-fuchsia-500 text-white font-extrabold shadow-lg shadow-violet-500/25 flex items-center justify-center gap-2"
+                                    >
+                                        <RefreshCcw className="w-4 h-4" />
+                                        Try Again
+                                    </button>
+                                </div>
+                            </motion.div>
+                        )}
+
                         {stage === "preview" && (
                             <motion.div key="preview" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="w-full max-w-md text-center space-y-5">
-                                {/* Pill */}
                                 <div className="ios-pill inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-white/70 dark:bg-white/8 border border-gray-200/40 dark:border-white/10 backdrop-blur-sm shadow-sm">
                                     <Camera className="w-3 h-3 text-violet-500" />
                                     <span className="text-[11px] font-extrabold tracking-wide text-gray-500 dark:text-gray-400 uppercase">Camera Ready</span>
@@ -228,7 +251,6 @@ const StudentFaceScanPage = memo(() => {
                                     Position yourself comfortably and ensure good lighting
                                 </p>
 
-                                {/* Camera feed */}
                                 <div className="relative aspect-square rounded-2xl sm:rounded-3xl overflow-hidden border-2 border-violet-300/50 dark:border-violet-500/20 shadow-xl shadow-violet-500/10">
                                     <Webcam
                                         audio={false}
@@ -236,13 +258,13 @@ const StudentFaceScanPage = memo(() => {
                                         mirrored
                                         videoConstraints={{ facingMode: "user" }}
                                         onUserMedia={bindVideoElement}
-                                        onLoadedMetadata={bindVideoElement}
                                         onUserMediaError={handleCameraError}
+                                        onLoadedMetadata={bindVideoElement}
+                                        onCanPlay={bindVideoElement}
                                         style={{ width: "100%", height: "100%" }}
                                     />
                                 </div>
 
-                                {/* Take photo button */}
                                 <motion.button
                                     onClick={handleTakePhoto}
                                     whileHover={{ scale: 1.02 }}
@@ -261,7 +283,6 @@ const StudentFaceScanPage = memo(() => {
                             </motion.div>
                         )}
 
-                        {/* Scanning in progress */}
                         {stage === "scanning" && (
                             <motion.div key="scanning" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="w-full max-w-md text-center space-y-5">
                                 <div className="ios-pill inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-white/70 dark:bg-white/8 border border-gray-200/40 dark:border-white/10 backdrop-blur-sm shadow-sm">
@@ -280,8 +301,9 @@ const StudentFaceScanPage = memo(() => {
                                         mirrored
                                         videoConstraints={{ facingMode: "user" }}
                                         onUserMedia={bindVideoElement}
-                                        onLoadedMetadata={bindVideoElement}
                                         onUserMediaError={handleCameraError}
+                                        onLoadedMetadata={bindVideoElement}
+                                        onCanPlay={bindVideoElement}
                                         style={{ width: "100%", height: "100%" }}
                                     />
                                     <StudentScanOverlay />
@@ -303,7 +325,6 @@ const StudentFaceScanPage = memo(() => {
                                     )}
                                 </div>
 
-                                {/* Progress bar */}
                                 <div className="space-y-2">
                                     <div className="flex justify-between text-sm">
                                         <span className="text-gray-400 dark:text-gray-500 font-medium">Progress</span>
@@ -326,7 +347,6 @@ const StudentFaceScanPage = memo(() => {
                             </motion.div>
                         )}
 
-                        {/* Analyzing */}
                         {stage === "analyzing" && (
                             <motion.div key="analyzing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center space-y-5 py-8">
                                 <motion.div
@@ -357,7 +377,6 @@ const StudentFaceScanPage = memo(() => {
                             </motion.div>
                         )}
 
-                        {/* Results - uses StudentResultsSection */}
                         {stage === "results" && analysisForView && (
                             <StudentResultsSection
                                 analysis={analysisForView}
@@ -372,7 +391,6 @@ const StudentFaceScanPage = memo(() => {
                         )}
                     </AnimatePresence>
 
-                    {/* Footer */}
                     {!isFullWidth && (
                         <motion.p
                             initial={{ opacity: 0 }}
