@@ -1,0 +1,48 @@
+# mws-daily-checkin — Local Development & Komodo Reference
+# ─────────────────────────────────────────────────────────
+# LOCAL DEV:  docker compose up --build
+# KOMODO:     Uses image: tags (no build:) — images pulled from GHCR
+#             Registry: ghcr.io/mws-mad-labs/
+# ─────────────────────────────────────────────────────────
+
+services:
+  backend:
+    image: ghcr.io/mws-mad-labs/mws-daily-checkin-be:staging
+    container_name: mws-daily-checkin-be
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+    networks:
+      - daily-checkin-net
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  frontend:
+    image: ghcr.io/mws-mad-labs/mws-daily-checkin-fe:staging
+    container_name: mws-daily-checkin-fe
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - daily-checkin-net
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:80/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+networks:
+  daily-checkin-net:
+    name: mws-daily-checkin-net
+    driver: bridge
