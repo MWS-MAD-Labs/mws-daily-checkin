@@ -76,14 +76,14 @@ networks:
 
 ---
 
-## GitHub Secrets yang Harus Diset di Repo
+## GitHub Secrets to set in the repo
 
-Di GitHub → `MWS-MAD-Labs/mws-daily-checkin` → Settings → Secrets → Actions:
+In GitHub → `MWS-MAD-Labs/mws-daily-checkin` → Settings → Secrets → Actions:
 
 | Secret Name | Value |
 |---|---|
-| `KOMODO_WEBHOOK_SECRET` | Sama dengan webhook secret di Komodo stack |
-| `KOMODO_WEBHOOK_URL` | URL webhook Komodo untuk stack `mws-daily-checkin` |
+| `KOMODO_WEBHOOK_SECRET` | Same as the webhook secret on the Komodo stack |
+| `KOMODO_WEBHOOK_URL` | The Komodo webhook URL for the `mws-daily-checkin` stack |
 
 ---
 
