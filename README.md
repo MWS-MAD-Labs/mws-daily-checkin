@@ -47,4 +47,9 @@ Both products share the same Google OAuth users. Users with MTSS roles are redir
 
 ## Deployment
 
-Same Komodo-based architecture as the legacy stack. The repo ships with `Dockerfile` + `docker-compose.yml` — adjust `REPO`, image tags, and domain routing to match the new GitHub Organization before the first deploy.
+Komodo deployment is image-based and driven by GitHub Actions:
+
+- `staging` branch -> GHCR `:staging` images -> staging stack at `https://app-stg.mws.web.id`
+- `main` branch -> GHCR `:production` images -> production stack at `https://app.millenniaws.sch.id`
+
+See `KOMODO_SETUP.md` for the full stack, secret, and URL reference.

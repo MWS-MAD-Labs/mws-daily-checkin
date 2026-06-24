@@ -1,0 +1,58 @@
+# mws-daily-checkin production - Komodo manual compose
+# Image-based, no build step. The production gateway reaches this stack through
+# the external mws-unified-prod network as daily-checkin-fe-prod.
+
+services:
+  backend:
+    image: ghcr.io/mws-mad-labs/mws-daily-checkin-be:production
+    container_name: daily-checkin-be-prod
+    restart: unless-stopped
+    env_file:
+      - ${ENV_FILE:-.env}
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+    expose:
+      - "3001"
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    image: ghcr.io/mws-mad-labs/mws-daily-checkin-fe:production
+    container_name: daily-checkin-fe-prod
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - internal
+      - mws-unified-prod
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  internal:
+    driver: bridge
+  mws-unified-prod:
+    external: true
+    name: mws-unified-prod

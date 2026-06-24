@@ -1,109 +1,83 @@
-# Komodo Stack Setup — mws-daily-checkin
+# Komodo Stack Setup - mws-daily-checkin
 
-## Stack Configuration
+Daily Check-in is served at the root path of the unified MWS app.
+
+| Environment | Branch | Image tag | Public URL | Komodo stack |
+|---|---|---|---|---|
+| Staging | `staging` | `staging` | `https://app-stg.mws.web.id` | `mws-daily-checkin` |
+| Production | `main` | `production` | `https://app.millenniaws.sch.id` | `mws-daily-checkin-production` |
+
+The stack is manual compose in Komodo. Komodo does not build images; GitHub
+Actions builds BE/FE images, pushes them to GHCR, then calls the stack webhook.
+
+## Staging Stack
+
+Use the existing staging stack if it already exists:
 
 | Field | Value |
 |---|---|
-| Stack Name | `mws-daily-checkin` |
-| Source | **Manual** (not linked_repo) |
-| Registry | GHCR (`ghcr.io/mws-mad-labs`) |
-| Webhook Secret | Set via Komodo → Stack → Webhook |
+| Stack name | `mws-daily-checkin` |
+| Source | Manual compose |
+| Branch that triggers it | `staging` |
+| Images | `ghcr.io/mws-mad-labs/mws-daily-checkin-{be,fe}:staging` |
+| Gateway network | `mws-unified` |
+| Gateway hostname | `https://app-stg.mws.web.id` |
 
----
+Compose reference is also available in the gateway repo:
+`mws-gateway/deploy/daily-checkin.compose.yml`.
 
-## Docker Compose (paste into Komodo → Stack → Compose)
+Required GitHub Actions secrets:
 
-```yaml
-services:
-  backend:
-    image: ghcr.io/mws-mad-labs/mws-daily-checkin-be:staging
-    container_name: mws-daily-checkin-be
-    restart: unless-stopped
-    environment:
-      NODE_ENV: production
-      PORT: 3001
-      MONGODB_URI: ${MONGODB_URI}
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRES_IN: 7d
-      SESSION_SECRET: ${SESSION_SECRET}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL}
-      GOOGLE_AI_API_KEY: ${GOOGLE_AI_API_KEY}
-      GOOGLE_AI_MODEL: gemini-flash-latest
-      AI_ANALYSIS_ENABLED: "true"
-      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
-      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
-      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
-      FRONTEND_URL: ${FRONTEND_URL}
-      CORS_ORIGINS: ${CORS_ORIGINS}
-      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN}
-      SLACK_APP_TOKEN: ${SLACK_APP_TOKEN}
-      SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET}
-      SMTP_HOST: smtp.gmail.com
-      SMTP_PORT: "587"
-      SMTP_USER: ${SMTP_USER}
-      SMTP_PASS: ${SMTP_PASS}
-      SMTP_FROM: ${SMTP_FROM}
-      RATE_LIMIT_WINDOW: "15"
-      RATE_LIMIT_MAX_REQUESTS: "600"
-    networks:
-      - daily-checkin-net
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3001/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 15s
-
-  frontend:
-    image: ghcr.io/mws-mad-labs/mws-daily-checkin-fe:staging
-    container_name: mws-daily-checkin-fe
-    restart: unless-stopped
-    ports:
-      - "8081:80"
-    depends_on:
-      backend:
-        condition: service_healthy
-    networks:
-      - daily-checkin-net
-
-networks:
-  daily-checkin-net:
-    name: mws-daily-checkin-net
-    driver: bridge
-```
-
----
-
-## GitHub Secrets to set in the repo
-
-In GitHub → `MWS-MAD-Labs/mws-daily-checkin` → Settings → Secrets → Actions:
-
-| Secret Name | Value |
+| Secret name | Notes |
 |---|---|
-| `KOMODO_WEBHOOK_SECRET` | Same as the webhook secret on the Komodo stack |
-| `KOMODO_WEBHOOK_URL` | The Komodo webhook URL for the `mws-daily-checkin` stack |
+| `KOMODO_STAGING_WEBHOOK_URL` | Preferred staging webhook URL |
+| `KOMODO_STAGING_WEBHOOK_SECRET` | Preferred staging webhook secret |
+| `KOMODO_WEBHOOK_URL` | Legacy fallback, currently supported |
+| `KOMODO_WEBHOOK_SECRET` | Legacy fallback, currently supported |
 
----
+## Production Stack
 
-## Environment Variables di Komodo
+Create a new Komodo stack for production/main:
 
-Di Komodo → Stack `mws-daily-checkin` → Environment:
+| Field | Value |
+|---|---|
+| Stack name | `mws-daily-checkin-production` |
+| Source | Manual compose |
+| Branch that triggers it | `main` |
+| Images | `ghcr.io/mws-mad-labs/mws-daily-checkin-{be,fe}:production` |
+| Gateway network | `mws-unified-prod` |
+| Gateway hostname | `https://app.millenniaws.sch.id` |
 
-```
+Paste `deploy/production.compose.yml` into the Komodo stack compose editor.
+Deploy the production gateway first so the external Docker network
+`mws-unified-prod` exists.
+
+Required GitHub Actions secrets:
+
+| Secret name | Notes |
+|---|---|
+| `KOMODO_PRODUCTION_WEBHOOK_URL` | Production stack webhook URL |
+| `KOMODO_PRODUCTION_WEBHOOK_SECRET` | Production stack webhook secret |
+
+## Environment Variables
+
+Set these in the Komodo stack Environment field. Keep secrets out of the repo.
+
+### Staging
+
+```env
 MONGODB_URI=mongodb+srv://...
 JWT_SECRET=...
 SESSION_SECRET=...
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
-GOOGLE_REDIRECT_URL=https://checkin-stg.mws.web.id/auth/google/callback
+GOOGLE_REDIRECT_URL=https://app-stg.mws.web.id/auth/google/callback
 GOOGLE_AI_API_KEY=...
 CLOUDINARY_CLOUD_NAME=...
 CLOUDINARY_API_KEY=...
 CLOUDINARY_API_SECRET=...
-FRONTEND_URL=https://checkin-stg.mws.web.id
-CORS_ORIGINS=https://checkin-stg.mws.web.id
+FRONTEND_URL=https://app-stg.mws.web.id
+CORS_ORIGINS=https://app-stg.mws.web.id
 SLACK_BOT_TOKEN=xoxb-...
 SLACK_APP_TOKEN=xapp-...
 SLACK_SIGNING_SECRET=...
@@ -112,26 +86,41 @@ SMTP_PASS=...
 SMTP_FROM=no-reply@millennia21.id
 ```
 
----
+### Production
+
+```env
+MONGODB_URI=mongodb+srv://...
+JWT_SECRET=...
+SESSION_SECRET=...
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REDIRECT_URL=https://app.millenniaws.sch.id/auth/google/callback
+GOOGLE_AI_API_KEY=...
+CLOUDINARY_CLOUD_NAME=...
+CLOUDINARY_API_KEY=...
+CLOUDINARY_API_SECRET=...
+FRONTEND_URL=https://app.millenniaws.sch.id
+CORS_ORIGINS=https://app.millenniaws.sch.id
+SLACK_BOT_TOKEN=xoxb-...
+SLACK_APP_TOKEN=xapp-...
+SLACK_SIGNING_SECRET=...
+SMTP_USER=no-reply@millennia21.id
+SMTP_PASS=...
+SMTP_FROM=no-reply@millennia21.id
+```
 
 ## Deploy Flow
 
-```
+```text
+Push to staging
+  -> GitHub Actions: staging quality gates
+  -> Build BE/FE images tagged :staging
+  -> Trigger Komodo stack mws-daily-checkin
+  -> Gateway serves https://app-stg.mws.web.id/
+
 Push to main
-  → GH Actions: test-be + test-fe (parallel)
-  → GH Actions: build-be + build-fe (parallel, after tests)
-  → GH Actions: deploy (trigger Komodo webhook)
-  → Komodo: docker compose pull → docker compose up -d
-  → Service accessible at: http://103.164.111.186:8081
+  -> GitHub Actions: production quality gates
+  -> Build BE/FE images tagged :production
+  -> Trigger Komodo stack mws-daily-checkin-production
+  -> Gateway serves https://app.millenniaws.sch.id/
 ```
-
-## Domain Setup (Cloudflare)
-
-Add DNS record:
-- Type: A
-- Name: `checkin-stg`
-- Value: `103.164.111.186`
-- Proxy: ON (orange cloud)
-- SSL: Full (strict)
-
-Akses: `https://checkin-stg.mws.web.id`
