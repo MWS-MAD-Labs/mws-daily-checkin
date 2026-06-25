@@ -10,6 +10,7 @@ export default defineConfig({
             strategies: 'generateSW',
             registerType: 'autoUpdate',
             filename: 'mws-sw.js',
+            cleanupOutdatedCaches: true,
             includeAssets: ['vite.svg', 'Millennia.webp'],
             manifest: {
                 name: 'MWS IntegraLearn - Premium Education Platform',
