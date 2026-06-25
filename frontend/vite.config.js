@@ -218,17 +218,17 @@ export default defineConfig({
         port: 5173,
         proxy: {
             '/api': {
-                target: 'http://localhost:3003',
+                target: 'http://localhost:3001',
                 changeOrigin: true,
                 secure: false
             },
             '/auth': {
-                target: 'http://localhost:3003',
+                target: 'http://localhost:3001',
                 changeOrigin: true,
                 secure: false
             },
             '/socket.io': {
-                target: 'http://localhost:3003',
+                target: 'http://localhost:3001',
                 changeOrigin: true,
                 secure: false,
                 ws: true
