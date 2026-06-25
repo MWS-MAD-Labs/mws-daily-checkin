@@ -1,6 +1,19 @@
 import { hasMtssAccess } from "@/utils/mtssAccess";
 
 const PENDING_AUTH_REDIRECT_KEY = "pending_auth_redirect";
+const SUPPORT_HUB_ROLES = new Set([
+    "staff",
+    "support_staff",
+    "nurse",
+    "counselor",
+    "teacher",
+    "se_teacher",
+    "head_unit",
+    "principal",
+    "directorate",
+    "admin",
+    "superadmin",
+]);
 
 export const sanitizeRedirectPath = (value) => {
     if (typeof value !== "string") return null;
@@ -47,10 +60,10 @@ export const getDefaultPostLoginPath = (userOrRole) => {
         return "/student/support-hub";
     }
 
-    if (hasMtssAccess(user || { role: normalizedRole })) {
+    if (SUPPORT_HUB_ROLES.has(normalizedRole) || hasMtssAccess(user || { role: normalizedRole })) {
         return "/support-hub";
     }
 
-    // staff, support_staff, and other non-MTSS roles go directly to check-in method selection
+    // Unknown/non-support roles go directly to check-in method selection.
     return "/select-role";
 };
