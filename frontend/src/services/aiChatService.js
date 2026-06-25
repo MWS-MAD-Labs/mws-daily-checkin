@@ -1,7 +1,8 @@
 import api from './authService';
 
 const withData = (response) => response?.data?.data || {};
-const CHAT_REQUEST_CONFIG = { skipGlobalLoading: true };
+const MTSS_API_BASE_URL = String(import.meta.env.VITE_MTSS_API_BASE || '/mtss/api/v1').replace(/\/+$/, '');
+const CHAT_REQUEST_CONFIG = { baseURL: MTSS_API_BASE_URL, skipGlobalLoading: true };
 
 /**
  * Send a message to AI and get response
