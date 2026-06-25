@@ -108,7 +108,7 @@ export default defineConfig({
                     }
                 ],
                 navigateFallback: '/index.html',
-                navigateFallbackDenylist: [/^\/api\//, /^\/auth\//, /^\/socket\.io\//],
+                navigateFallbackDenylist: [/^\/api\//, /^\/auth\//, /^\/socket\.io\//, /^\/mtss(?:\/|$)/],
                 // Disable auto service worker registration since we handle it manually
                 skipWaiting: true,
                 clientsClaim: true
