@@ -28,8 +28,9 @@ const userSchema = new mongoose.Schema({
         default: 'staff'
     },
     department: {
+        // No enum — mws-data-center is the source of truth for unit names,
+        // synced as-is on every login (see employeeCentralSync.js).
         type: String,
-        enum: ['Directorate', 'Elementary', 'Junior High', 'Kindergarten', 'Operational', 'MAD Lab', 'Finance', 'Pelangi', 'CARE'],
         trim: true
     },
     employeeId: {
@@ -57,13 +58,15 @@ const userSchema = new mongoose.Schema({
         trim: true
     },
     jobLevel: {
+        // No enum — mws-data-center is the source of truth for job level
+        // names, synced as-is on every login (see employeeCentralSync.js).
         type: String,
-        enum: ['Director', 'Head Unit', 'Staff', 'Teacher', 'SE Teacher', 'Support Staff'],
         trim: true
     },
     unit: {
+        // No enum — mws-data-center is the source of truth for unit names,
+        // synced as-is on every login (see employeeCentralSync.js).
         type: String,
-        enum: ['Directorate', 'Elementary', 'Junior High', 'Kindergarten', 'Operational', 'MAD Lab', 'Finance', 'Pelangi', 'CARE'],
         trim: true
     },
     jobPosition: {
@@ -71,8 +74,9 @@ const userSchema = new mongoose.Schema({
         trim: true
     },
     employmentStatus: {
+        // No enum — mws-data-center's EmploymentType has more values than we
+        // used to allow (PART_TIME, FREELANCE, WFH); synced as-is now.
         type: String,
-        enum: ['Permanent', 'Contract', 'Probation'],
         default: 'Permanent'
     },
     joinDate: {

@@ -6,6 +6,7 @@ const {
     deriveUnitFromGrade,
     normalizeEmail
 } = require('../utils/studentUserHelpers');
+const { syncEmployeeFromCentral } = require('../utils/employeeCentralSync');
 
 const googleOAuthConfigured = Boolean(
     process.env.GOOGLE_CLIENT_ID &&
@@ -77,19 +78,31 @@ if (googleOAuthConfigured) {
                     return done(null, userStudent);
                 }
 
-                // Check if staff user exists with this Google ID
+                // Check if staff user exists with this Google ID, then by email
                 let user = await User.findOne({ googleId: profile.id });
-
-                if (user) {
-                    console.log('? Found existing user by Google ID:', user._id);
-                    return done(null, user);
+                if (!user) {
+                    user = await User.findOne({ email: normalizedEmail });
                 }
 
-                // Check if staff user exists with this email
-                user = await User.findOne({ email: normalizedEmail });
+                // mws-data-center is the source of truth for employee identity —
+                // every login re-validates against it instead of trusting the
+                // Google profile or a stale local record alone.
+                let centralFields;
+                try {
+                    centralFields = await syncEmployeeFromCentral(normalizedEmail);
+                } catch (error) {
+                    console.error('❌ mws-data-center lookup failed:', error.message);
+                    return done(new Error('Unable to verify employee with central database'), null);
+                }
+
+                if (!centralFields) {
+                    console.log('❌ No active employee record in mws-data-center for:', normalizedEmail);
+                    return done(new Error('Employee not found or inactive in central database'), null);
+                }
 
                 if (user) {
-                    console.log('? Found existing user by email, linking Google account:', user._id);
+                    console.log('✅ Found existing staff user, syncing from mws-data-center:', user._id);
+                    Object.assign(user, centralFields);
                     user.googleId = profile.id;
                     user.googleProfile = profile;
                     user.emailVerified = true;
@@ -98,28 +111,21 @@ if (googleOAuthConfigured) {
                     return done(null, user);
                 }
 
-                // Create new user (only for millennia21.id domain)
-                if (!normalizedEmail.endsWith('@millennia21.id')) {
-                    console.log('? Email domain not allowed:', normalizedEmail);
-                    return done(new Error('Only @millennia21.id email addresses are allowed'), null);
-                }
-
-                // Create a staff user record for @millennia21.id domain
-                console.log('?? Creating new staff user for millennia21.id domain');
+                console.log('🆕 Creating new staff user from mws-data-center record:', normalizedEmail);
                 const username = normalizedEmail.split('@')[0];
                 user = new User({
                     googleId: profile.id,
                     email: normalizedEmail,
-                    name: profile.displayName,
                     username,
                     role: 'staff',
+                    ...centralFields,
                     googleProfile: profile,
                     isActive: true,
                     emailVerified: true,
                     lastLogin: new Date()
                 });
                 await user.save();
-                console.log('? New user created:', user._id);
+                console.log('✅ New user created:', user._id);
                 return done(null, user);
             } catch (error) {
                 console.error('? Google OAuth error:', error);

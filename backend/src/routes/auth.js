@@ -7,6 +7,7 @@ const UserStudent = require('../models/UserStudent');
 const { sendSuccess, sendError } = require('../utils/response');
 const { hasDashboardAccess, hasMtssAccess } = require('../utils/accessControl');
 const { buildRequestUser } = require('../middleware/auth');
+const { syncEmployeeFromCentral } = require('../utils/employeeCentralSync');
 
 // Session middleware is only needed for Google OAuth flow.
 // Email/password login and JWT-based routes do NOT require sessions.
@@ -169,8 +170,26 @@ router.post('/login', require('../middleware/validation').validate(require('../u
             return sendError(res, 'Invalid credentials', 401);
         }
 
-        // Update last login
-        await userModel.findByIdAndUpdate(user._id, { lastLogin: new Date() });
+        // Staff identity is validated/synced against mws-data-center on every
+        // login — students aren't covered by that API yet, so left as-is.
+        if (userModel === User) {
+            let centralFields;
+            try {
+                centralFields = await syncEmployeeFromCentral(normalizedEmail);
+            } catch (error) {
+                console.error('mws-data-center lookup failed:', error.message);
+                return sendError(res, 'Unable to verify employee with central database', 502);
+            }
+
+            if (!centralFields) {
+                return sendError(res, 'Employee not found or inactive in central database', 403);
+            }
+
+            Object.assign(user, centralFields);
+        }
+
+        user.lastLogin = new Date();
+        await user.save();
 
         // Generate JWT token
         const jwt = require('jsonwebtoken');
@@ -186,7 +205,7 @@ router.post('/login', require('../middleware/validation').validate(require('../u
 
         // Return user data and token
         const userData = {
-            user: buildRequestUser({ ...user.toObject(), lastLogin: new Date() }),
+            user: buildRequestUser(user),
             token
         };
 

@@ -225,7 +225,14 @@ export default defineConfig({
             '/auth': {
                 target: 'http://localhost:3001',
                 changeOrigin: true,
-                secure: false
+                secure: false,
+                // /auth/callback is a frontend SPA route (AuthCallback.jsx), not
+                // a backend endpoint — let Vite serve it instead of proxying.
+                bypass(req) {
+                    if (req.url.startsWith('/auth/callback')) {
+                        return req.url;
+                    }
+                }
             },
             '/socket.io': {
                 target: 'http://localhost:3001',
