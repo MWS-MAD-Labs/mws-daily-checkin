@@ -26,19 +26,28 @@ const UserStatsOverview = memo(({ organizationStructure, totalUsers, lastUpdated
     const stats = useMemo(() => {
         // Always try to get real stats from organizationStructure
         const { stats: orgStats } = organizationStructure || {};
+        const countByValue = (items = [], value) => {
+            const normalizedValue = String(value).toLowerCase();
+
+            return items
+                .filter((item) => String(item?._id || '').toLowerCase() === normalizedValue)
+                .reduce((total, item) => total + (item.count || 0), 0);
+        };
+        const activeUsers = orgStats?.totalUsers || 0;
+        const registeredUsers = Math.max(totalUsers || 0, activeUsers);
 
         return {
-            totalUsers: totalUsers || orgStats?.totalUsers || 0,
-            directorate: orgStats?.byRole?.find(r => r._id === 'directorate')?.count || 0,
-            teachers: (orgStats?.byRole?.find(r => r._id === 'teacher')?.count || 0) +
-                (orgStats?.byRole?.find(r => r._id === 'se_teacher')?.count || 0),
-            staff: (orgStats?.byRole?.find(r => r._id === 'staff')?.count || 0) +
-                (orgStats?.byRole?.find(r => r._id === 'head_unit')?.count || 0),
-            supportStaff: orgStats?.byRole?.find(r => r._id === 'support_staff')?.count || 0,
-            students: orgStats?.byRole?.find(r => r._id === 'student')?.count || 0,
-            permanent: orgStats?.byEmploymentStatus?.find(s => s._id === 'Permanent')?.count || 0,
-            contract: orgStats?.byEmploymentStatus?.find(s => s._id === 'Contract')?.count || 0,
-            probation: orgStats?.byEmploymentStatus?.find(s => s._id === 'Probation')?.count || 0
+            totalUsers: registeredUsers,
+            activeUsers,
+            inactiveUsers: Math.max(registeredUsers - activeUsers, 0),
+            directorate: countByValue(orgStats?.byRole, 'directorate'),
+            teachers: countByValue(orgStats?.byRole, 'teacher') + countByValue(orgStats?.byRole, 'se_teacher'),
+            staff: countByValue(orgStats?.byRole, 'staff') + countByValue(orgStats?.byRole, 'head_unit'),
+            supportStaff: countByValue(orgStats?.byRole, 'support_staff'),
+            students: countByValue(orgStats?.byRole, 'student'),
+            permanent: countByValue(orgStats?.byEmploymentStatus, 'Permanent'),
+            contract: countByValue(orgStats?.byEmploymentStatus, 'Contract'),
+            probation: countByValue(orgStats?.byEmploymentStatus, 'Probation')
         };
     }, [organizationStructure, totalUsers]);
 
@@ -46,6 +55,7 @@ const UserStatsOverview = memo(({ organizationStructure, totalUsers, lastUpdated
         return organizationStructure?.directorate || [];
     }, [organizationStructure]);
 
+    const departments = organizationStructure?.stats?.byDepartment || [];
 
     // Always show stats, even if organization structure is not loaded yet
     if (!stats) {
@@ -173,43 +183,14 @@ const UserStatsOverview = memo(({ organizationStructure, totalUsers, lastUpdated
                             Department Distribution
                         </h3>
                         <div className="space-y-2 text-sm">
-                            {organizationStructure?.stats?.byDepartment?.map(dept => (
+                            {departments.length > 0 ? departments.map(dept => (
                                 <div key={dept._id} className="flex justify-between">
                                     <span className="text-muted-foreground">{dept._id || 'No Department'}</span>
                                     <span className="font-medium">{dept.count}</span>
                                 </div>
-                            )) || (
-                                    <>
-                                        <div className="flex justify-between text-muted-foreground">
-                                            <span>Directorate</span>
-                                            <span>0</span>
-                                        </div>
-                                        <div className="flex justify-between text-muted-foreground">
-                                            <span>Elementary</span>
-                                            <span>0</span>
-                                        </div>
-                                        <div className="flex justify-between text-muted-foreground">
-                                            <span>Junior High</span>
-                                            <span>0</span>
-                                        </div>
-                                        <div className="flex justify-between text-muted-foreground">
-                                            <span>Operational</span>
-                                            <span>0</span>
-                                        </div>
-                                        <div className="flex justify-between text-muted-foreground">
-                                            <span>MAD Lab</span>
-                                            <span>0</span>
-                                        </div>
-                                        <div className="flex justify-between text-muted-foreground">
-                                            <span>Finance</span>
-                                            <span>0</span>
-                                        </div>
-                                        <div className="flex justify-between text-muted-foreground">
-                                            <span>CARE</span>
-                                            <span>0</span>
-                                        </div>
-                                    </>
-                                )}
+                            )) : (
+                                <p className="text-muted-foreground">No department data found</p>
+                            )}
                         </div>
                     </motion.div>
                 </div>
@@ -227,11 +208,11 @@ const UserStatsOverview = memo(({ organizationStructure, totalUsers, lastUpdated
                         <div className="space-y-2">
                             <div className="flex justify-between text-sm">
                                 <span className="text-muted-foreground">Active Users</span>
-                                <span className="font-medium text-green-600">{stats.totalUsers}</span>
+                                <span className="font-medium text-green-600">{stats.activeUsers}</span>
                             </div>
                             <div className="flex justify-between text-sm">
                                 <span className="text-muted-foreground">Inactive Users</span>
-                                <span className="font-medium text-red-600">0</span>
+                                <span className="font-medium text-red-600">{stats.inactiveUsers}</span>
                             </div>
                         </div>
                     </motion.div>

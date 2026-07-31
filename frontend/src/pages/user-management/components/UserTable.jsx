@@ -1,6 +1,6 @@
-import React, { memo, useState, useMemo } from "react";
+import { memo, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Edit, Trash2, Eye, ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
+import { CheckCircle2, Edit, Trash2, Eye, ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
     Table,
@@ -19,22 +19,15 @@ import {
 import { Badge } from "@/components/ui/badge";
 
 const StatusBadge = memo(({ status, employmentStatus }) => {
-    const getStatusColor = (status, employmentStatus) => {
-        if (!status) return "secondary";
-        if (!status) return "destructive";
-
-        switch (employmentStatus) {
-            case 'Permanent': return 'default';
-            case 'Contract': return 'secondary';
-            case 'Probation': return 'outline';
-            default: return 'secondary';
-        }
-    };
-
     return (
-        <Badge variant={getStatusColor(status, employmentStatus)} className="text-xs">
-            {employmentStatus || 'Unknown'}
-        </Badge>
+        <div className="space-y-1">
+            <Badge variant={status ? 'default' : 'destructive'} className="text-xs">
+                {status ? 'Active' : 'Inactive'}
+            </Badge>
+            {employmentStatus && (
+                <div className="text-xs text-muted-foreground">{employmentStatus}</div>
+            )}
+        </div>
     );
 });
 
@@ -81,6 +74,7 @@ const UserTable = memo(({
     pagination,
     onPageChange,
     onEditUser,
+    onActivateUser,
     onDeleteUser,
     onViewUser
 }) => {
@@ -173,14 +167,14 @@ const UserTable = memo(({
                                     Department {sortField === 'department' && (sortDirection === 'asc' ? '↑' : '↓')}
                                 </TableHead>
                                 <TableHead>Role</TableHead>
-                                <TableHead>Status</TableHead>
+                                <TableHead>Account</TableHead>
                                 <TableHead>Working Period</TableHead>
                                 <TableHead className="w-12"></TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             <AnimatePresence>
-                                {sortedUsers.map((user, index) => (
+                                {sortedUsers.map((user) => (
                                     <TableRow
                                         key={user._id || user.id}
                                         className="hover:bg-muted/30"
@@ -242,13 +236,23 @@ const UserTable = memo(({
                                                         <Edit className="w-4 h-4 mr-2" />
                                                         Edit User
                                                     </DropdownMenuItem>
-                                                    <DropdownMenuItem
-                                                        onClick={() => onDeleteUser(user._id || user.id)}
-                                                        className="text-destructive"
-                                                    >
-                                                        <Trash2 className="w-4 h-4 mr-2" />
-                                                        Deactivate
-                                                    </DropdownMenuItem>
+                                                    {user.isActive ? (
+                                                        <DropdownMenuItem
+                                                            onClick={() => onDeleteUser(user._id || user.id)}
+                                                            className="text-destructive"
+                                                        >
+                                                            <Trash2 className="w-4 h-4 mr-2" />
+                                                            Deactivate
+                                                        </DropdownMenuItem>
+                                                    ) : (
+                                                        <DropdownMenuItem
+                                                            onClick={() => onActivateUser(user._id || user.id)}
+                                                            className="text-green-600"
+                                                        >
+                                                            <CheckCircle2 className="w-4 h-4 mr-2" />
+                                                            Activate
+                                                        </DropdownMenuItem>
+                                                    )}
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                         </TableCell>

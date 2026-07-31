@@ -6,7 +6,11 @@ export const fetchUsers = createAsyncThunk(
     'users/fetchUsers',
     async (params = {}, { rejectWithValue }) => {
         try {
-            const response = await api.get('/users', { params });
+            const { skipGlobalLoading, ...queryParams } = params;
+            const response = await api.get('/users', {
+                params: queryParams,
+                skipGlobalLoading
+            });
             return response.data;
         } catch (error) {
             return rejectWithValue(error.response?.data?.message || 'Failed to fetch users');
@@ -40,9 +44,11 @@ export const createUser = createAsyncThunk(
 
 export const updateUser = createAsyncThunk(
     'users/updateUser',
-    async ({ userId, userData }, { rejectWithValue }) => {
+    async ({ userId, userData, skipGlobalLoading }, { rejectWithValue }) => {
         try {
-            const response = await api.put(`/users/${userId}`, userData);
+            const response = await api.put(`/users/${userId}`, userData, {
+                skipGlobalLoading
+            });
             return response.data;
         } catch (error) {
             return rejectWithValue(error.response?.data?.message || 'Failed to update user');
@@ -52,9 +58,14 @@ export const updateUser = createAsyncThunk(
 
 export const deleteUser = createAsyncThunk(
     'users/deleteUser',
-    async (userId, { rejectWithValue }) => {
+    async (payload, { rejectWithValue }) => {
         try {
-            await api.delete(`/users/${userId}`);
+            const userId = typeof payload === 'object' ? payload.userId : payload;
+            const skipGlobalLoading = typeof payload === 'object' ? payload.skipGlobalLoading : false;
+
+            await api.delete(`/users/${userId}`, {
+                skipGlobalLoading
+            });
             return userId;
         } catch (error) {
             return rejectWithValue(error.response?.data?.message || 'Failed to delete user');
@@ -142,8 +153,7 @@ const initialState = {
         unit: '',
         jobLevel: '',
         employmentStatus: '',
-        search: '',
-        isActive: true
+        search: ''
     },
     loading: false,
     error: null,
@@ -159,7 +169,11 @@ const userSlice = createSlice({
             state.error = null;
         },
         setFilters: (state, action) => {
-            state.filters = action.payload;
+            state.filters = {
+                page: 1,
+                limit: state.filters.limit || 20,
+                ...action.payload
+            };
         },
         resetFilters: (state) => {
             state.filters = initialState.filters;
@@ -171,9 +185,11 @@ const userSlice = createSlice({
             state.currentUser = null;
         },
         updateUserInList: (state, action) => {
-            const index = state.users.findIndex(user => user.id === action.payload.id);
+            const updatedUser = action.payload;
+            const updatedUserId = updatedUser?._id || updatedUser?.id;
+            const index = state.users.findIndex(user => (user._id || user.id) === updatedUserId);
             if (index !== -1) {
-                state.users[index] = { ...state.users[index], ...action.payload };
+                state.users[index] = { ...state.users[index], ...updatedUser };
             }
         }
     },
@@ -226,36 +242,57 @@ const userSlice = createSlice({
 
             // Update user
             .addCase(updateUser.pending, (state) => {
-                state.loading = true;
                 state.error = null;
             })
             .addCase(updateUser.fulfilled, (state, action) => {
-                state.loading = false;
-                const index = state.users.findIndex(user => user.id === action.payload.user.id);
-                if (index !== -1) {
-                    state.users[index] = action.payload.user;
+                const updatedUser = action.payload.data?.user || action.payload.user;
+                const updatedUserId = updatedUser?._id || updatedUser?.id;
+
+                if (!updatedUser || !updatedUserId) {
+                    return;
                 }
-                if (state.currentUser && state.currentUser.id === action.payload.user.id) {
-                    state.currentUser = action.payload.user;
+
+                const shouldRemoveFromInactiveView = state.filters.isActive === false && updatedUser.isActive === true;
+                const shouldRemoveFromActiveView = state.filters.isActive === true && updatedUser.isActive === false;
+
+                if (shouldRemoveFromInactiveView || shouldRemoveFromActiveView) {
+                    state.users = state.users.filter(user => (user._id || user.id) !== updatedUserId);
+                    state.pagination.totalUsers = Math.max(0, state.pagination.totalUsers - 1);
+                    return;
+                }
+
+                const index = state.users.findIndex(user => (user._id || user.id) === updatedUserId);
+                if (index !== -1) {
+                    state.users[index] = { ...state.users[index], ...updatedUser };
+                }
+                if (state.currentUser && (state.currentUser._id || state.currentUser.id) === updatedUserId) {
+                    state.currentUser = { ...state.currentUser, ...updatedUser };
                 }
             })
             .addCase(updateUser.rejected, (state, action) => {
-                state.loading = false;
                 state.error = action.payload;
             })
 
             // Delete user
             .addCase(deleteUser.pending, (state) => {
-                state.loading = true;
                 state.error = null;
             })
             .addCase(deleteUser.fulfilled, (state, action) => {
-                state.loading = false;
-                state.users = state.users.filter(user => user.id !== action.payload);
-                state.pagination.totalUsers -= 1;
+                const deactivatedUserId = action.payload;
+                const shouldRemoveFromActiveView = state.filters.isActive === true;
+
+                if (shouldRemoveFromActiveView) {
+                    state.users = state.users.filter(user => (user._id || user.id) !== deactivatedUserId);
+                    state.pagination.totalUsers = Math.max(0, state.pagination.totalUsers - 1);
+                    return;
+                }
+
+                const index = state.users.findIndex(user => (user._id || user.id) === deactivatedUserId);
+                if (index !== -1) {
+                    state.users[index].isActive = false;
+                }
             })
             .addCase(deleteUser.rejected, (state, action) => {
-                state.loading = false;
                 state.error = action.payload;
             })
 
@@ -266,7 +303,7 @@ const userSlice = createSlice({
             })
             .addCase(fetchOrganizationStructure.fulfilled, (state, action) => {
                 state.loading = false;
-                state.organizationStructure = action.payload;
+                state.organizationStructure = action.payload.data || action.payload;
             })
             .addCase(fetchOrganizationStructure.rejected, (state, action) => {
                 state.loading = false;
@@ -320,7 +357,7 @@ const userSlice = createSlice({
                 state.loading = true;
                 state.error = null;
             })
-            .addCase(createOrganization.fulfilled, (state, action) => {
+            .addCase(createOrganization.fulfilled, (state) => {
                 state.loading = false;
                 // Optionally refresh organization structure
             })

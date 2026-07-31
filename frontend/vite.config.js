@@ -214,20 +214,20 @@ export default defineConfig({
         }
     },
     server: {
-        port: 5173,
+        port: 8090,
         proxy: {
             '/api': {
-                target: 'http://localhost:3003',
+                target: 'http://localhost:3001',
                 changeOrigin: true,
                 secure: false
             },
-            '/auth': {
-                target: 'http://localhost:3003',
+            '^/auth/google': {
+                target: 'http://localhost:3001',
                 changeOrigin: true,
                 secure: false
             },
             '/socket.io': {
-                target: 'http://localhost:3003',
+                target: 'http://localhost:3001',
                 changeOrigin: true,
                 secure: false,
                 ws: true
