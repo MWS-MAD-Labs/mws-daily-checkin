@@ -159,7 +159,7 @@ const userSlice = createSlice({
             state.error = null;
         },
         setFilters: (state, action) => {
-            state.filters = { ...state.filters, ...action.payload };
+            state.filters = action.payload;
         },
         resetFilters: (state) => {
             state.filters = initialState.filters;
