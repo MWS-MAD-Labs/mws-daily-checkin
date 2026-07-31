@@ -37,8 +37,7 @@ const UserFilters = memo(({ filters, onFiltersChange, onAddUser }) => {
     const clearAllFilters = () => {
         onFiltersChange({
             page: 1,
-            limit: 20,
-            isActive: true
+            limit: 20
         });
     };
 
@@ -282,8 +281,14 @@ const UserFilters = memo(({ filters, onFiltersChange, onAddUser }) => {
                     <div>
                         <label className="text-sm font-medium mb-2 block">Account Status</label>
                         <Select
-                            value={filters.isActive !== undefined ? filters.isActive.toString() : ''}
-                            onValueChange={(value) => handleFilterChange('isActive', value === 'true')}
+                            value={filters.isActive !== undefined ? filters.isActive.toString() : 'all_accounts'}
+                            onValueChange={(value) => {
+                                if (value === 'all_accounts') {
+                                    clearFilter('isActive');
+                                } else {
+                                    onFiltersChange({ ...filters, isActive: value === 'true', page: 1 });
+                                }
+                            }}
                         >
                             <SelectTrigger>
                                 <SelectValue placeholder="All Accounts" />
