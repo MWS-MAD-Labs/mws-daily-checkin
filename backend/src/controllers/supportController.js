@@ -37,6 +37,16 @@ const isSubjectTeacherAssignment = (role) => {
         normalizedRole.includes('subject');
 };
 
+// mws-data-center's ClassTeacherAssignment.role values -> this app's
+// contact category. No SUPPORTING_HOMEROOM/SUBJECT_TEACHER SE-teacher
+// distinction centrally - a SUBJECT_TEACHER assignment held by a locally
+// se_teacher-role user gets bumped to 'seTeacher' at the call site instead.
+const CENTRAL_ASSIGNMENT_ROLE_TO_CATEGORY = {
+    HOMEROOM: 'classTeacher',
+    SUPPORTING_HOMEROOM: 'classTeacher',
+    SUBJECT_TEACHER: 'gradeTeacher'
+};
+
 const getAssignmentCategory = (role) => {
     if (isHomeroomAssignment(role)) return 'classTeacher';
     if (isSETeacherAssignment(role)) return 'seTeacher';
@@ -277,6 +287,49 @@ const getSupportContacts = async (req, res) => {
                     foundUser.contactCategory = specificUser.contactCategory || 'other';
                     supportUsers.push(foundUser);
                 }
+            }
+        }
+
+        // Primary source for class teachers: mws-data-center's
+        // ClassTeacherAssignment data for the student's actual current
+        // class - reliable, synced from the real roster. The Organization /
+        // User.classes mechanisms below are a local, manually-maintained
+        // fallback for when this call fails or a matched teacher isn't
+        // provisioned as a local user yet - their dedup checks
+        // (`!supportUsers.find(...)`) naturally skip anyone already added
+        // here, so nothing needs disabling if this succeeds.
+        if (userRole === 'student') {
+            try {
+                const { getStudentSupportContacts } = require('../services/mwsDataCenterClient');
+                const centralContacts = await getStudentSupportContacts(req.user.email);
+
+                for (const centralTeacher of centralContacts?.teachers || []) {
+                    const localTeacher = await User.findOne({
+                        email: centralTeacher.email,
+                        isActive: true
+                    }).select('name username email department employeeId role jobLevel unit jobPosition gender');
+
+                    if (!localTeacher || supportUsers.find(u => u._id.toString() === localTeacher._id.toString())) {
+                        continue;
+                    }
+
+                    let category = CENTRAL_ASSIGNMENT_ROLE_TO_CATEGORY[centralTeacher.role];
+                    if (!category) continue;
+                    if (category === 'gradeTeacher' && localTeacher.role === 'se_teacher') {
+                        category = 'seTeacher';
+                    }
+
+                    localTeacher.contactCategory = category;
+                    localTeacher.isClassTeacher = category === 'classTeacher';
+                    localTeacher.isSETeacher = category === 'seTeacher';
+                    localTeacher.isGradeTeacher = category === 'gradeTeacher';
+                    localTeacher.classInfo = [centralContacts.current_class, centralTeacher.subject]
+                        .filter(Boolean)
+                        .join(' - ');
+                    supportUsers.push(localTeacher);
+                }
+            } catch (centralError) {
+                console.log('Could not fetch class teachers from mws-data-center, falling back to local data:', centralError.message);
             }
         }
 

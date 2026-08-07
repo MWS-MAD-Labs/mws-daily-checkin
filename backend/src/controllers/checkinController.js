@@ -1589,26 +1589,56 @@ const getAvailableContacts = async (req, res) => {
                 contactableRoles = ['directorate', 'head_unit'];
         }
 
+        // For students, look up their actual class's homeroom/subject
+        // teachers from mws-data-center so the frontend can flag/group them
+        // distinctly from the generic school-wide contact list below (which
+        // stays unfiltered - a student may legitimately want to contact a
+        // teacher who isn't theirs, or support_staff/directorate/head_unit,
+        // none of which are class-specific). Keyed by lowercased email since
+        // that's the only identifier shared between the two systems.
+        let classTeachersByEmail = null;
+        if (userRole === 'student') {
+            try {
+                const { getStudentSupportContacts } = require('../services/mwsDataCenterClient');
+                const supportContacts = await getStudentSupportContacts(req.user.email);
+                if (supportContacts?.teachers?.length) {
+                    classTeachersByEmail = new Map(
+                        supportContacts.teachers.map((t) => [t.email.toLowerCase(), t])
+                    );
+                }
+            } catch (error) {
+                console.error('⚠️ Failed to fetch class support contacts from mws-data-center, falling back to the generic contact list:', error.message);
+            }
+        }
+
         // Get available contacts
         const contacts = await User.find({
             role: { $in: contactableRoles },
             isActive: true,
             _id: { $ne: req.user.id } // Exclude self
         })
-            .select('_id name role department jobLevel unit jobPosition')
+            .select('_id name email role department jobLevel unit jobPosition')
             .sort({ name: 1 });
 
         // Add "No Need" option
         const contactOptions = [
-            ...contacts.map(contact => ({
-                id: contact._id.toString(),
-                name: contact.name,
-                role: contact.role,
-                department: contact.department || 'General',
-                jobLevel: contact.jobLevel || 'N/A',
-                unit: contact.unit || 'N/A',
-                jobPosition: contact.jobPosition || 'N/A'
-            })),
+            ...contacts.map(contact => {
+                const classMatch = classTeachersByEmail?.get((contact.email || '').toLowerCase());
+                return {
+                    id: contact._id.toString(),
+                    name: contact.name,
+                    role: contact.role,
+                    department: contact.department || 'General',
+                    jobLevel: contact.jobLevel || 'N/A',
+                    unit: contact.unit || 'N/A',
+                    jobPosition: contact.jobPosition || 'N/A',
+                    // Matches the field name studentSupportSelectorUtils.js
+                    // already groups on ("Homeroom Teachers" category).
+                    isClassTeacher: Boolean(classMatch),
+                    classTeacherRole: classMatch?.role ?? null,
+                    subject: classMatch?.subject ?? null
+                };
+            }),
             {
                 id: 'no-need',
                 name: 'No Need',

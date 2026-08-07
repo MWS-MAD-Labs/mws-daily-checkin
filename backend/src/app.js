@@ -11,6 +11,7 @@ const openRouterChat = require('./config/openRouterChat');
 const { initSocket } = require('./config/socket');
 const slackSocketService = require('./services/slackSocketService');
 const { createCorsOriginChecker, validateCorsConfiguration } = require('./config/cors');
+const employeeRosterSync = require('./jobs/employeeRosterSync');
 
 // Import routes
 const routes = require('./routes');
@@ -126,6 +127,11 @@ const initializeApp = async () => {
 
         // Connect to MongoDB
         await connectDB();
+
+        // Periodically mirror the active employee roster from mws-data-center,
+        // so someone deactivated there gets logged out here too (and a
+        // rehired employee gets reactivated) instead of only syncing at login.
+        employeeRosterSync.start();
 
         // Test Google AI connection (with graceful fallback for overload and quota)
         try {

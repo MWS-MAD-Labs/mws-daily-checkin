@@ -10,6 +10,7 @@ export default defineConfig({
             strategies: 'generateSW',
             registerType: 'autoUpdate',
             filename: 'mws-sw.js',
+            cleanupOutdatedCaches: true,
             includeAssets: ['vite.svg', 'Millennia.webp'],
             manifest: {
                 name: 'MWS IntegraLearn - Premium Education Platform',
@@ -107,7 +108,7 @@ export default defineConfig({
                     }
                 ],
                 navigateFallback: '/index.html',
-                navigateFallbackDenylist: [/^\/api\//, /^\/auth\//, /^\/socket\.io\//],
+                navigateFallbackDenylist: [/^\/api\//, /^\/auth\//, /^\/socket\.io\//, /^\/mtss(?:\/|$)/],
                 // Disable auto service worker registration since we handle it manually
                 skipWaiting: true,
                 clientsClaim: true
@@ -217,17 +218,30 @@ export default defineConfig({
         port: 5173,
         proxy: {
             '/api': {
-                target: 'http://localhost:3003',
+                target: 'http://localhost:3001',
                 changeOrigin: true,
                 secure: false
             },
             '/auth': {
-                target: 'http://localhost:3003',
+                target: 'http://localhost:3001',
                 changeOrigin: true,
-                secure: false
+                secure: false,
+                // /auth/callback is a frontend SPA route (AuthCallback.jsx), not
+                // a backend endpoint — let Vite serve it instead of proxying.
+                bypass(req) {
+                    if (req.url.startsWith('/auth/callback')) {
+                        return req.url;
+                    }
+                }
             },
             '/socket.io': {
-                target: 'http://localhost:3003',
+                target: 'http://localhost:3001',
+                changeOrigin: true,
+                secure: false,
+                ws: true
+            },
+            '/mtss': {
+                target: 'http://127.0.0.1:5174',
                 changeOrigin: true,
                 secure: false,
                 ws: true

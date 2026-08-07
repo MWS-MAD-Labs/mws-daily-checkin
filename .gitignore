@@ -6,7 +6,7 @@ coverage/
 
 .env
 .env.local
-.env.*.local
+.env.*
 .env.docker
 backend/.env
 backend/.env.docker

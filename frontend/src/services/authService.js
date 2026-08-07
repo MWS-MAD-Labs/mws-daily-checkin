@@ -46,9 +46,15 @@ api.interceptors.response.use(
             stopGlobalLoading();
         }
         if (error.response?.status === 401) {
+            const requestBaseUrl = error?.config?.baseURL;
+            // Requests to other proxied services (e.g. /mtss/api/v1) override
+            // baseURL per-call - a 401 there is that service's own auth
+            // rejecting us, not a sign our own session is invalid. Only treat
+            // 401s from our own API (default baseURL) as a real auth failure.
+            const isOwnApiRequest = !requestBaseUrl || requestBaseUrl === API_BASE_URL;
             const requestPath = String(error?.config?.url || '');
             const isLoginRequest = /\/auth\/login$/i.test(requestPath);
-            if (!isLoginRequest) {
+            if (isOwnApiRequest && !isLoginRequest) {
                 const msg = String(error.response?.data?.message || '').toLowerCase();
                 const authFailureHints = [
                     'token expired',

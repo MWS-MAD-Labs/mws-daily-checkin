@@ -3,6 +3,7 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
 const User = require('../models/User');
+const { mapJobLevelToRole } = require('../utils/jobLevelRoleMapping');
 require('dotenv').config();
 
 const ROSTER_FILE = path.resolve(__dirname, './data/latestUserRoster.psv');
@@ -82,16 +83,12 @@ const normalizeJobLevel = (value = '', fallback = 'Staff') => {
     return DEFAULT_SUPPORTED_JOB_LEVELS.has(fallback) ? fallback : 'Staff';
 };
 
-const deriveRole = (record = {}, existingUser = {}) => {
+// jobLevel here is the already-canonicalized value from normalizeJobLevel()
+// (one of DEFAULT_SUPPORTED_JOB_LEVELS), not the raw record field - matches
+// what mapJobLevelToRole()'s exact-match lookup expects.
+const deriveRole = (jobLevel, existingUser = {}) => {
     if (['admin', 'superadmin'].includes(existingUser?.role)) return existingUser.role;
-
-    const jobLevel = normalizeComparable(record.jobLevel);
-    if (jobLevel === 'director') return 'directorate';
-    if (jobLevel === 'head unit') return 'head_unit';
-    if (jobLevel === 'se teacher') return 'se_teacher';
-    if (jobLevel === 'teacher') return 'teacher';
-    if (jobLevel === 'support staff') return 'support_staff';
-    return 'staff';
+    return mapJobLevelToRole(jobLevel) || 'staff';
 };
 
 const deriveClassRole = (jobPosition = '', jobLevel = '') => {
@@ -322,7 +319,7 @@ const buildUserUpdate = (record = {}, existingUser = {}, now = new Date()) => {
         email: record.email || existingUser?.email,
         name: record.fullName || existingUser?.name,
         username,
-        role: deriveRole(record, existingUser),
+        role: deriveRole(jobLevel, existingUser),
         department: unit,
         jobLevel,
         unit,
