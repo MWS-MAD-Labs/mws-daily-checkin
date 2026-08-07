@@ -1,6 +1,6 @@
-import { memo, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Search, Filter, X, Plus, Download } from "lucide-react";
+import { CheckCircle2, Power, Search, Filter, X, Plus, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -12,8 +12,51 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 
-const UserFilters = memo(({ filters, onFiltersChange, onAddUser }) => {
+const UserFilters = memo(({
+    filters,
+    onFiltersChange,
+    onAddUser,
+    bulkStatusMode,
+    bulkStatusCount = 0,
+    bulkStatusLoading = false,
+    onBulkStatusAction
+}) => {
     const [isExpanded, setIsExpanded] = useState(false);
+    const [searchValue, setSearchValue] = useState(filters.search || '');
+    const filtersRef = useRef(filters);
+
+    const hasFilterValue = (value) => value !== '' && value !== null && value !== undefined;
+
+    useEffect(() => {
+        filtersRef.current = filters;
+    }, [filters]);
+
+    useEffect(() => {
+        setSearchValue(filters.search || '');
+    }, [filters.search]);
+
+    useEffect(() => {
+        const normalizedSearch = searchValue.trim();
+        const currentSearch = filters.search || '';
+
+        if (normalizedSearch === currentSearch) {
+            return undefined;
+        }
+
+        const timeoutId = window.setTimeout(() => {
+            const nextFilters = { ...filtersRef.current, page: 1 };
+
+            if (normalizedSearch) {
+                nextFilters.search = normalizedSearch;
+            } else {
+                delete nextFilters.search;
+            }
+
+            onFiltersChange(nextFilters);
+        }, 350);
+
+        return () => window.clearTimeout(timeoutId);
+    }, [filters.search, onFiltersChange, searchValue]);
 
     const handleFilterChange = (key, value) => {
         // Convert "all_*" values back to empty string for API
@@ -28,6 +71,9 @@ const UserFilters = memo(({ filters, onFiltersChange, onAddUser }) => {
     const clearFilter = (key) => {
         const newFilters = { ...filters };
         delete newFilters[key];
+        if (key === 'search') {
+            setSearchValue('');
+        }
         onFiltersChange({
             ...newFilters,
             page: 1
@@ -35,6 +81,7 @@ const UserFilters = memo(({ filters, onFiltersChange, onAddUser }) => {
     };
 
     const clearAllFilters = () => {
+        setSearchValue('');
         onFiltersChange({
             page: 1,
             limit: 20
@@ -42,7 +89,7 @@ const UserFilters = memo(({ filters, onFiltersChange, onAddUser }) => {
     };
 
     const activeFiltersCount = Object.keys(filters).filter(key =>
-        key !== 'page' && key !== 'limit' && filters[key] !== '' && filters[key] !== null && filters[key] !== undefined
+        key !== 'page' && key !== 'limit' && hasFilterValue(filters[key])
     ).length;
 
     const formatFilterLabel = (key, value) => {
@@ -57,6 +104,8 @@ const UserFilters = memo(({ filters, onFiltersChange, onAddUser }) => {
                 return `Job Level: ${value}`;
             case 'employmentStatus':
                 return `Status: ${value}`;
+            case 'isActive':
+                return `Account: ${value ? 'Active' : 'Inactive'}`;
             case 'search':
                 return `Search: "${value}"`;
             default:
@@ -71,7 +120,7 @@ const UserFilters = memo(({ filters, onFiltersChange, onAddUser }) => {
             className="glass glass-card p-4 md:p-6"
         >
             {/* Header */}
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <div className="flex items-center space-x-4">
                     <h3 className="text-lg font-semibold">Filters</h3>
                     {activeFiltersCount > 0 && (
@@ -80,7 +129,24 @@ const UserFilters = memo(({ filters, onFiltersChange, onAddUser }) => {
                         </Badge>
                     )}
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex flex-wrap items-center gap-2">
+                    {bulkStatusMode && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={onBulkStatusAction}
+                            disabled={bulkStatusLoading || bulkStatusCount === 0}
+                        >
+                            {bulkStatusMode === 'activate' ? (
+                                <CheckCircle2 className="w-4 h-4 mr-2" />
+                            ) : (
+                                <Power className="w-4 h-4 mr-2" />
+                            )}
+                            {bulkStatusLoading
+                                ? 'Updating...'
+                                : `${bulkStatusMode === 'activate' ? 'Activate' : 'Deactivate'} All`}
+                        </Button>
+                    )}
                     <Button
                         variant="outline"
                         size="sm"
@@ -115,8 +181,8 @@ const UserFilters = memo(({ filters, onFiltersChange, onAddUser }) => {
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                     <Input
                         placeholder="Search by name, email, or position..."
-                        value={filters.search || ''}
-                        onChange={(e) => handleFilterChange('search', e.target.value)}
+                        value={searchValue}
+                        onChange={(e) => setSearchValue(e.target.value)}
                         className="pl-10"
                     />
                 </div>
@@ -138,7 +204,7 @@ const UserFilters = memo(({ filters, onFiltersChange, onAddUser }) => {
                     </div>
                     <div className="flex flex-wrap gap-2">
                         {Object.entries(filters).map(([key, value]) => {
-                            if (key === 'page' || key === 'limit' || !value || value === '') return null;
+                            if (key === 'page' || key === 'limit' || !hasFilterValue(value)) return null;
                             return (
                                 <Badge
                                     key={key}
@@ -279,7 +345,7 @@ const UserFilters = memo(({ filters, onFiltersChange, onAddUser }) => {
 
                     {/* Active Status Filter */}
                     <div>
-                        <label className="text-sm font-medium mb-2 block">Account Status</label>
+                        <label className="text-sm font-medium mb-2 block">Account</label>
                         <Select
                             value={filters.isActive !== undefined ? filters.isActive.toString() : 'all_accounts'}
                             onValueChange={(value) => {
