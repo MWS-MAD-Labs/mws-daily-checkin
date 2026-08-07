@@ -21,6 +21,33 @@ async function lookupEmployeeByEmail(email) {
   }
 }
 
+async function lookupStudentByEmail(email) {
+  try {
+    const { data } = await client.get("/students/lookup", {
+      params: { email },
+    });
+    return data.data;
+  } catch (error) {
+    if (error.response?.status === 404) return null;
+    throw error;
+  }
+}
+
+// Returns { current_class, teachers: [{name, email, role, subject}] } or
+// null if the student has no active record centrally (404). A missing
+// current class is not an error - returns teachers: [] in that case.
+async function getStudentSupportContacts(email) {
+  try {
+    const { data } = await client.get("/students/support-contacts", {
+      params: { email },
+    });
+    return data.data;
+  } catch (error) {
+    if (error.response?.status === 404) return null;
+    throw error;
+  }
+}
+
 const LIST_PAGE_SIZE = 100;
 
 // Fetches every ACTIVE employee, walking all pages. Throws on any page
@@ -43,4 +70,9 @@ async function listActiveEmployees() {
   return employees;
 }
 
-module.exports = { lookupEmployeeByEmail, listActiveEmployees };
+module.exports = {
+  lookupEmployeeByEmail,
+  listActiveEmployees,
+  lookupStudentByEmail,
+  getStudentSupportContacts,
+};

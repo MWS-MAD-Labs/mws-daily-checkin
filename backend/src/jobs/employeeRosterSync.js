@@ -1,6 +1,7 @@
 const winston = require('winston');
 const User = require('../models/User');
 const { listActiveEmployees } = require('../services/mwsDataCenterClient');
+const { mapJobLevelToRole } = require('../utils/jobLevelRoleMapping');
 
 // authenticate() (middleware/auth.js) only checks the local isActive flag,
 // never mws-data-center directly - it only gets re-synced from central at
@@ -61,6 +62,13 @@ async function syncEmployeeRoster() {
     for (const user of candidates) {
         const employee = rosterByEmail.get(normalizeEmail(user.email));
         const nextFields = employee ? buildFieldsFromCentral(employee) : { isActive: false };
+
+        if (employee) {
+            const mappedRole = mapJobLevelToRole(employee.job_level);
+            if (mappedRole) {
+                nextFields.role = mappedRole;
+            }
+        }
 
         if (!hasChanges(user, nextFields)) continue;
 

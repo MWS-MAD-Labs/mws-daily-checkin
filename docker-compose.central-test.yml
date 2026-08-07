@@ -1,0 +1,73 @@
+# Reference compose for validating the mws-data-center integration directly
+# on this host, over the private LAN IP - same address a real Daily Check-in
+# deployment would use before the Cloudflare tunnel exists.
+#
+# Not used by CI. Run locally with:
+#   docker compose -f docker-compose.central-test.yml --env-file .env.central-test up --build
+#
+# In Komodo: paste this file as a Manual Compose stack, deployed on the same
+# Server as mws-central-database-app (private IPs below only resolve from
+# that host). Supply the values below via the Stack's Environment field -
+# it writes them to a .env file next to this compose file.
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: daily-checkin-central-test-be
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      MONGODB_URI: ${MONGODB_URI}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: 7d
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL:-http://localhost:8090/auth/google/callback}
+      SESSION_SECRET: ${SESSION_SECRET}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8090}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8090}
+      # Central's staging API, reached over the private LAN IP - swap for
+      # https://db.mws.web.id/api/internal once the Cloudflare tunnel is live.
+      MWS_DATA_CENTER_API_URL: ${MWS_DATA_CENTER_API_URL}
+      MWS_DATA_CENTER_API_TOKEN: ${MWS_DATA_CENTER_API_TOKEN}
+      GOOGLE_AI_API_KEY: ${GOOGLE_AI_API_KEY:-CHANGE_ME}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-CHANGE_ME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-CHANGE_ME}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-CHANGE_ME}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-CHANGE_ME}
+      SLACK_APP_TOKEN: ${SLACK_APP_TOKEN:-CHANGE_ME}
+      SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-CHANGE_ME}
+      SMTP_HOST: smtp.gmail.com
+      SMTP_PORT: 587
+      SMTP_USER: ${SMTP_USER:-CHANGE_ME}
+      SMTP_PASS: ${SMTP_PASS:-CHANGE_ME}
+      SMTP_FROM: no-reply@millennia21.id
+      RATE_LIMIT_WINDOW: 15
+      RATE_LIMIT_MAX_REQUESTS: 600
+    ports:
+      - "3020:3001"
+    networks:
+      - central-test-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE: /api/v1
+    container_name: daily-checkin-central-test-fe
+    ports:
+      - "8090:80"
+    depends_on:
+      - backend
+    networks:
+      - central-test-net
+
+networks:
+  central-test-net:
+    driver: bridge
+
+#// docker compose -f docker-compose.central-test.yml --env-file .env.central-test build --no-cache
+#// docker compose -f docker-compose.central-test.yml --env-file .env.central-test down
