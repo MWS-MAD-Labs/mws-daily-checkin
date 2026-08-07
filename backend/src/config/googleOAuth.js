@@ -114,12 +114,15 @@ async function googleOAuthVerify(accessToken, refreshToken, profile, done) {
             centralFields = await syncEmployeeFromCentral(normalizedEmail);
         } catch (error) {
             console.error('❌ mws-data-center lookup failed:', error.message);
-            return done(new Error('Unable to verify employee with central database'), null);
+            // done(null, false, info) - an auth failure, not a server error - so
+            // failureRedirect below fires instead of falling into the global
+            // error handler, which masks the message to "Something went wrong".
+            return done(null, false, { message: 'central_lookup_failed' });
         }
 
         if (!centralFields) {
             console.log('❌ No active employee record in mws-data-center for:', normalizedEmail);
-            return done(new Error('Employee not found or inactive in central database'), null);
+            return done(null, false, { message: 'central_inactive' });
         }
 
         if (user) {

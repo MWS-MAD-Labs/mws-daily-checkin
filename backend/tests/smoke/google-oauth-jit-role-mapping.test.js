@@ -84,6 +84,24 @@ describe('Google OAuth JIT role mapping', () => {
     expect(lastUserConstructorArgs.role).toBe('staff');
   });
 
+  test('central lookup throwing calls done(null, false, info) instead of an Error - so failureRedirect fires', async () => {
+    mockSyncEmployeeFromCentral.mockRejectedValue(new Error('network error'));
+
+    const done = jest.fn();
+    await googleOAuthVerify('token', 'refresh', profile, done);
+
+    expect(done).toHaveBeenCalledWith(null, false, { message: 'central_lookup_failed' });
+  });
+
+  test('inactive/missing central employee calls done(null, false, info) instead of an Error - so failureRedirect fires', async () => {
+    mockSyncEmployeeFromCentral.mockResolvedValue(null);
+
+    const done = jest.fn();
+    await googleOAuthVerify('token', 'refresh', profile, done);
+
+    expect(done).toHaveBeenCalledWith(null, false, { message: 'central_inactive' });
+  });
+
   test('existing user role is left untouched on login refresh, regardless of central job_level', async () => {
     const existingUser = {
       _id: 'existing-user-id',

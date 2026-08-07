@@ -1,4 +1,4 @@
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { loginUser } from "../../store/slices/authSlice";
@@ -21,6 +21,20 @@ const TRUST = [
   { icon: Smartphone, text: 'PWA Ready' },
 ];
 
+// Codes set by backend redirects (auth.js /google/callback, AuthCallback.jsx)
+// after a failed login - none of these were surfaced to the user before,
+// they just landed back here silently.
+const OAUTH_ERROR_MESSAGES = {
+  central_inactive: 'Your account is inactive in the central database. Contact an administrator.',
+  central_lookup_failed: "Couldn't verify your account with the central database. Please try again shortly.",
+  account_inactive: 'Your account has been deactivated. Contact an administrator.',
+  user_not_found: "We couldn't find your account. Contact an administrator.",
+  missing_data: 'Sign-in response was incomplete. Please try again.',
+  missing_role: 'Your account has no role assigned. Contact an administrator.',
+  callback_failed: 'Sign-in failed while completing the redirect. Please try again.',
+  oauth_failed: 'Google sign-in failed. Please try again.',
+};
+
 const HeroSection = memo(() => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -30,6 +44,22 @@ const HeroSection = memo(() => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const errorCode = params.get("error");
+    if (!errorCode) return;
+
+    toast({
+      title: "Sign-in failed",
+      description: OAUTH_ERROR_MESSAGES[errorCode] || "Something went wrong signing in. Please try again.",
+      variant: "destructive",
+    });
+
+    params.delete("error");
+    const query = params.toString();
+    window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+  }, [toast]);
 
   const handleGoogleSignIn = useCallback(() => {
     const apiBase = import.meta.env.VITE_API_BASE || "/api/v1";

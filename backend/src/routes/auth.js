@@ -54,7 +54,27 @@ router.get('/google',
 router.get('/google/callback',
     ...oauthMiddleware,
     ensureGoogleOAuthConfigured,
-    passport.authenticate('google', { failureRedirect: '/?error=oauth_failed' }),
+    (req, res, next) => {
+        // Custom callback instead of { failureRedirect } so the specific
+        // failure reason (set via done(null, false, info) in googleOAuthVerify)
+        // reaches the frontend as ?error=<code> instead of a generic one.
+        passport.authenticate('google', (err, user, info) => {
+            if (err) {
+                console.error('❌ Google OAuth error:', err);
+                return res.redirect('/?error=oauth_failed');
+            }
+            if (!user) {
+                return res.redirect(`/?error=${encodeURIComponent(info?.message || 'oauth_failed')}`);
+            }
+            req.logIn(user, (loginErr) => {
+                if (loginErr) {
+                    console.error('❌ Google OAuth session login error:', loginErr);
+                    return res.redirect('/?error=oauth_failed');
+                }
+                next();
+            });
+        })(req, res, next);
+    },
     async (req, res) => {
         try {
             console.log('✅ Google OAuth successful for user:', req.user.email);
