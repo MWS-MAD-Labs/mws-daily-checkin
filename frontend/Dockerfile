@@ -6,6 +6,8 @@ WORKDIR /app
 # Accept build args
 ARG VITE_API_BASE
 ENV VITE_API_BASE=$VITE_API_BASE
+ARG VITE_SUPPORT_EMAIL
+ENV VITE_SUPPORT_EMAIL=$VITE_SUPPORT_EMAIL
 
 # Install dependencies first (cache layer)
 COPY package*.json ./

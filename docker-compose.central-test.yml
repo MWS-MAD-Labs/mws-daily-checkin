@@ -57,6 +57,7 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_API_BASE: /api/v1
+        VITE_SUPPORT_EMAIL: admin@millennia21.id
     container_name: daily-checkin-central-test-fe
     ports:
       - "8090:80"
@@ -69,5 +70,7 @@ networks:
   central-test-net:
     driver: bridge
 
-#// docker compose -f docker-compose.central-test.yml --env-file .env.central-test build --no-cache
+#// docker compose -f docker-compose.central-test.yml --env-file .env.central-test up --build
 #// docker compose -f docker-compose.central-test.yml --env-file .env.central-test down
+#// docker compose -f docker-compose.central-test.yml --env-file .env.central-test build --no-cache
+#// docker compose -f docker-compose.central-test.yml --env-file .env.central-test up

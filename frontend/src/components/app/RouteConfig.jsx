@@ -8,6 +8,7 @@ import { useSelector } from "react-redux";
 
 const LandingPage = lazy(() => import(/* webpackPrefetch: true */ '@/pages/LandingPage'));
 const AuthCallback = lazy(() => import(/* webpackPrefetch: true */ '@/pages/AuthCallback'));
+const AccountNotFoundPage = lazy(() => import(/* webpackPrefetch: true */ '@/pages/AccountNotFoundPage'));
 const EmotionalCheckinFaceScanPage = lazy(() => import('@/pages/VerificationPage'));
 const ProfilePage = lazy(() => import(/* webpackPrefetch: true */ '@/pages/ProfilePage'));
 const NotificationPage = lazy(() => import(/* webpackPrefetch: true */ '@/pages/NotificationPage'));
@@ -68,6 +69,7 @@ AdminProtectedRoute.displayName = 'AdminProtectedRoute';
 const publicRoutes = [
     <Route key="landing" path="/" element={<MemoizedPageTransition><LandingPage /></MemoizedPageTransition>} />,
     <Route key="auth-callback" path="/auth/callback" element={<MemoizedPageTransition><AuthCallback /></MemoizedPageTransition>} />,
+    <Route key="account-not-found" path="/account-not-found" element={<MemoizedPageTransition><AccountNotFoundPage /></MemoizedPageTransition>} />,
     <Route key="face-scan" path="/emotional-checkin/face-scan" element={<MemoizedPageTransition><EmotionalCheckinFaceScanPage /></MemoizedPageTransition>} />,
     <Route key="select-role" path="/select-role" element={<ProtectedRoute allowedRoles={['staff', 'support_staff', 'nurse', 'counselor', 'teacher', 'se_teacher', 'head_unit', 'principal', 'directorate', 'admin', 'superadmin']}><MemoizedPageTransition><RoleSelectionPage /></MemoizedPageTransition></ProtectedRoute>} />,
     <Route key="profile" path="/profile" element={<ProtectedRoute><MemoizedPageTransition><ProfilePage /></MemoizedPageTransition></ProtectedRoute>} />,

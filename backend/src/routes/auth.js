@@ -22,6 +22,17 @@ const buildOAuthMiddleware = () => {
 };
 const oauthMiddleware = buildOAuthMiddleware();
 
+// Extracted so redirect-branching is unit-testable without mocking passport.
+function resolveOAuthFailureRedirect(info) {
+    // "Not registered in central at all" gets its own page instead of a
+    // toast - central_lookup_failed (transient/network) stays on the
+    // generic toast path, it's a different, retry-able case.
+    if (info?.message === 'central_inactive') {
+        return '/account-not-found';
+    }
+    return `/?error=${encodeURIComponent(info?.message || 'oauth_failed')}`;
+}
+
 const ensureGoogleOAuthConfigured = (req, res, next) => {
     if (passport.googleOAuthConfigured) {
         return next();
@@ -64,7 +75,7 @@ router.get('/google/callback',
                 return res.redirect('/?error=oauth_failed');
             }
             if (!user) {
-                return res.redirect(`/?error=${encodeURIComponent(info?.message || 'oauth_failed')}`);
+                return res.redirect(resolveOAuthFailureRedirect(info));
             }
             req.logIn(user, (loginErr) => {
                 if (loginErr) {
@@ -291,3 +302,4 @@ router.get('/me', require('../middleware/auth').authenticate, async (req, res) =
 });
 
 module.exports = router;
+module.exports.resolveOAuthFailureRedirect = resolveOAuthFailureRedirect;
