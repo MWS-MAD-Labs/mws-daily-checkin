@@ -50,14 +50,14 @@ const startServer = async () => {
     try {
         // Start HTTP server
         server.listen(PORT, () => {
-            winston.info(`🚀 Server running on port ${PORT}`);
-            winston.info(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-            winston.info(`🔗 API available at: http://localhost:${PORT}/api`);
-            winston.info(`💚 Health check: http://localhost:${PORT}/health`);
-            winston.info(`🟢 Readiness check: http://localhost:${PORT}/ready`);
+            winston.info(`Server running on port ${PORT}`);
+            winston.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
+            winston.info(`API available at: http://localhost:${PORT}/api`);
+            winston.info(`Health check: http://localhost:${PORT}/health`);
+            winston.info(`Readiness check: http://localhost:${PORT}/ready`);
             // Log OAuth-related config for debugging
-            winston.info(`🌐 FRONTEND_URL: ${process.env.FRONTEND_URL || 'NOT SET (will use localhost:5173)'}`);
-            winston.info(`🔑 GOOGLE_REDIRECT_URL: ${process.env.GOOGLE_REDIRECT_URL || 'NOT SET'}`);
+            winston.info(`FRONTEND_URL: ${process.env.FRONTEND_URL || 'NOT SET (will use localhost:5173)'}`);
+            winston.info(`GOOGLE_REDIRECT_URL: ${process.env.GOOGLE_REDIRECT_URL || 'NOT SET'}`);
         });
 
         initializeApp().then((initialized) => {
