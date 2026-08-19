@@ -8,6 +8,9 @@ const { sendSuccess, sendError } = require('../utils/response');
 const { hasDashboardAccess, hasMtssAccess } = require('../utils/accessControl');
 const { buildRequestUser } = require('../middleware/auth');
 const { syncEmployeeFromCentral } = require('../utils/employeeCentralSync');
+const { verifyHubRelayToken } = require('../utils/hubSsoRelay');
+const { resolveOrProvisionSsoUser } = require('../utils/ssoUserResolution');
+const { createUserAwareRateLimiter } = require('../middleware/rateLimiter');
 
 // Session middleware is only needed for Google OAuth flow.
 // Email/password login and JWT-based routes do NOT require sessions.
@@ -21,6 +24,10 @@ const buildOAuthMiddleware = () => {
     ];
 };
 const oauthMiddleware = buildOAuthMiddleware();
+
+// Tighter than the general apiLimiter (which skips /v1/auth entirely) -
+// this is a sensitive auth entry point, not a regular auth check.
+const ssoLimiter = createUserAwareRateLimiter({ windowMinutes: 1, max: 20, skip: () => false });
 
 // Extracted so redirect-branching is unit-testable without mocking passport.
 function resolveOAuthFailureRedirect(info) {
@@ -176,6 +183,71 @@ router.get('/google/callback',
         }
     }
 );
+
+// Hub token-relay SSO handoff. Hub already authenticated the user (its own
+// Google login) and mints a short-lived, single-use, audience-scoped token
+// asserting "this email"; we never trust anything beyond that email claim -
+// every profile field still comes fresh from mws-data-center, same as the
+// Google OAuth path above. On any failure this falls back to the same
+// generic error redirects the OAuth flow already uses, so a failed relay
+// token can't be distinguished from a failed OAuth attempt by the browser.
+router.get('/sso', ssoLimiter, async (req, res) => {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
+    const { token } = req.query;
+
+    if (!token || typeof token !== 'string') {
+        return res.redirect(`${frontendUrl}/?error=sso_missing_token`);
+    }
+
+    let payload;
+    try {
+        payload = verifyHubRelayToken(token);
+    } catch (error) {
+        console.error('❌ Hub SSO relay token verification failed:', error.message);
+        return res.redirect(`${frontendUrl}/?error=sso_invalid_token`);
+    }
+
+    try {
+        const dbUser = await resolveOrProvisionSsoUser(payload.sub);
+
+        if (!dbUser) {
+            console.log('❌ No active central record for Hub SSO email:', payload.sub);
+            return res.redirect(`${frontendUrl}/account-not-found`);
+        }
+
+        if (!dbUser.isActive) {
+            console.error('❌ Inactive user attempted Hub SSO login:', dbUser.email);
+            return res.redirect(`${frontendUrl}/?error=account_inactive`);
+        }
+
+        const token7d = jwt.sign(
+            { userId: dbUser._id, email: dbUser.email, role: dbUser.role },
+            process.env.JWT_SECRET,
+            { expiresIn: '7d' }
+        );
+
+        const userDataForFrontend = {
+            ...buildRequestUser(dbUser),
+            lastLogin: dbUser.lastLogin,
+            isActive: dbUser.isActive,
+            emailVerified: dbUser.emailVerified,
+            validatedAt: new Date().toISOString(),
+            authMethod: 'hub_sso'
+        };
+
+        const redirectTarget = dbUser.role === 'student'
+            ? '/emotional-checkin'
+            : (userDataForFrontend.mtssAccess?.hasAccess ? '/support-hub' : '/select-role');
+
+        const redirectUrl = `${frontendUrl}/auth/callback#token=${encodeURIComponent(token7d)}&user=${encodeURIComponent(JSON.stringify(userDataForFrontend))}&redirect=${encodeURIComponent(redirectTarget)}`;
+
+        console.log('✅ Hub SSO login successful for:', dbUser.email);
+        res.redirect(redirectUrl);
+    } catch (error) {
+        console.error('❌ Hub SSO handoff error:', error);
+        res.redirect(`${frontendUrl}/?error=sso_failed`);
+    }
+});
 
 // Manual login route
 router.post('/login', require('../middleware/validation').validate(require('../utils/validationSchemas').userLoginSchema), async (req, res) => {
