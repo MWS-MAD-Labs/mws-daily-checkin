@@ -33,6 +33,16 @@ class CacheService {
         return this.cache.del(key);
     }
 
+    // Hub SSO relay replay protection - a jti is only valid to consume once.
+    // TTL just needs to outlive the relay token's own short expiry window.
+    hasSeenSsoJti(jti) {
+        return this.cache.has(`hub-sso-jti:${jti}`);
+    }
+
+    markSsoJtiSeen(jti, ttlSeconds = 120) {
+        return this.cache.set(`hub-sso-jti:${jti}`, true, ttlSeconds);
+    }
+
     // User profile cache
     setUserProfile(userId, userData) {
         const key = `user:${userId}`;
