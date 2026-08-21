@@ -21,6 +21,22 @@ async function lookupEmployeeByEmail(email) {
   }
 }
 
+// employee_id is the stable identifier - unlike email, it doesn't change
+// when someone updates their address in mws-data-center. Used as a fallback
+// when an already-linked local account's live Google email no longer
+// matches what's on file centrally (see syncEmployeeFromCentral).
+async function lookupEmployeeByEmployeeId(employeeId) {
+  try {
+    const { data } = await client.get("/employees/lookup", {
+      params: { employee_id: employeeId },
+    });
+    return data.data;
+  } catch (error) {
+    if (error.response?.status === 404) return null;
+    throw error;
+  }
+}
+
 async function lookupStudentByEmail(email) {
   try {
     const { data } = await client.get("/students/lookup", {
@@ -72,6 +88,7 @@ async function listActiveEmployees() {
 
 module.exports = {
   lookupEmployeeByEmail,
+  lookupEmployeeByEmployeeId,
   listActiveEmployees,
   lookupStudentByEmail,
   getStudentSupportContacts,

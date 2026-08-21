@@ -22,7 +22,7 @@ jest.mock('../../src/utils/studentCentralSync', () => ({
 
 const mockSyncEmployeeFromCentral = jest.fn();
 jest.mock('../../src/utils/employeeCentralSync', () => ({
-  syncEmployeeFromCentral: mockSyncEmployeeFromCentral
+  syncEmployeeFromCentralWithFallback: mockSyncEmployeeFromCentral
 }));
 
 const passport = require('../../src/config/googleOAuth');
@@ -127,5 +127,63 @@ describe('Google OAuth JIT role mapping', () => {
     expect(done).toHaveBeenCalledWith(null, existingUser);
     expect(existingUser.role).toBe('admin');
     expect(mockUserSave).toHaveBeenCalled();
+  });
+
+  test('passes the existing linked user\'s employeeId as the fallback identifier', async () => {
+    const existingUser = {
+      _id: 'existing-user-id',
+      email: 'old.address@millennia21.id',
+      employeeId: '15.24.756',
+      role: 'staff',
+      save: mockUserSave
+    };
+    // Found by googleId (first findOne call) - the live Google email may
+    // no longer match what mws-data-center has on file, which is exactly
+    // the scenario syncEmployeeFromCentralWithFallback's employeeId
+    // fallback exists for.
+    UserMock.findOne.mockResolvedValueOnce(existingUser);
+
+    mockSyncEmployeeFromCentral.mockResolvedValue({
+      name: 'Someone',
+      email: 'someone@millennia21.id',
+      employeeId: '15.24.756',
+      jobPosition: 'Some Position',
+      jobLevel: 'Support Staff',
+      employmentStatus: 'PERMANENT',
+      department: 'Elementary',
+      unit: 'Elementary'
+    });
+
+    const done = jest.fn();
+    await googleOAuthVerify('token', 'refresh', profile, done);
+
+    expect(mockSyncEmployeeFromCentral).toHaveBeenCalledWith(
+      'someone@millennia21.id',
+      '15.24.756',
+    );
+    expect(done).toHaveBeenCalledWith(null, existingUser);
+    // Central's email is now trusted over the stale local one.
+    expect(existingUser.email).toBe('someone@millennia21.id');
+  });
+
+  test('brand new account has no employeeId to fall back with', async () => {
+    mockSyncEmployeeFromCentral.mockResolvedValue({
+      name: 'Someone',
+      employeeId: '99.99.999',
+      jobPosition: 'Some Position',
+      jobLevel: 'Staff',
+      employmentStatus: 'PERMANENT',
+      department: 'Elementary',
+      unit: 'Elementary'
+    });
+
+    const done = jest.fn();
+    await googleOAuthVerify('token', 'refresh', profile, done);
+
+    expect(mockSyncEmployeeFromCentral).toHaveBeenCalledWith(
+      'someone@millennia21.id',
+      undefined,
+    );
+    expect(done).toHaveBeenCalledWith(null, expect.anything());
   });
 });

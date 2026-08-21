@@ -6,7 +6,7 @@ const {
     deriveUnitFromGrade,
     normalizeEmail
 } = require('../utils/studentUserHelpers');
-const { syncEmployeeFromCentral } = require('../utils/employeeCentralSync');
+const { syncEmployeeFromCentralWithFallback } = require('../utils/employeeCentralSync');
 const { syncStudentFromCentral } = require('../utils/studentCentralSync');
 const { mapJobLevelToRole } = require('../utils/jobLevelRoleMapping');
 
@@ -108,10 +108,19 @@ async function googleOAuthVerify(accessToken, refreshToken, profile, done) {
 
         // mws-data-center is the source of truth for employee identity —
         // every login re-validates against it instead of trusting the
-        // Google profile or a stale local record alone.
+        // Google profile or a stale local record alone. For an
+        // already-linked account, falls back to a lookup by employeeId
+        // (stable) when the live Google email no longer matches what's on
+        // file centrally - e.g. someone changed their email in
+        // mws-data-center and their Workspace primary address hasn't
+        // caught up yet. A brand new account has no employeeId to fall
+        // back to, so this is a no-op for that case.
         let centralFields;
         try {
-            centralFields = await syncEmployeeFromCentral(normalizedEmail);
+            centralFields = await syncEmployeeFromCentralWithFallback(
+                normalizedEmail,
+                user?.employeeId,
+            );
         } catch (error) {
             console.error('❌ mws-data-center lookup failed:', error.message);
             // done(null, false, info) - an auth failure, not a server error - so
