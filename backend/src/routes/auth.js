@@ -40,6 +40,15 @@ function resolveOAuthFailureRedirect(info) {
     return `/?error=${encodeURIComponent(info?.message || 'oauth_failed')}`;
 }
 
+const isCentralLookupError = (error) => {
+    const baseUrl = error?.config?.baseURL;
+    const path = error?.config?.url;
+    return Boolean(
+        baseUrl === process.env.MWS_DATA_CENTER_API_URL ||
+        (typeof path === 'string' && /^\/(employees|students)\//.test(path))
+    );
+};
+
 const ensureGoogleOAuthConfigured = (req, res, next) => {
     if (passport.googleOAuthConfigured) {
         return next();
@@ -235,17 +244,26 @@ router.get('/sso', ssoLimiter, async (req, res) => {
             authMethod: 'hub_sso'
         };
 
-        const redirectTarget = dbUser.role === 'student'
-            ? '/emotional-checkin'
-            : (userDataForFrontend.mtssAccess?.hasAccess ? '/support-hub' : '/select-role');
+        const redirectTarget = '/select-role';
 
         const redirectUrl = `${frontendUrl}/auth/callback#token=${encodeURIComponent(token7d)}&user=${encodeURIComponent(JSON.stringify(userDataForFrontend))}&redirect=${encodeURIComponent(redirectTarget)}`;
 
-        console.log('✅ Hub SSO login successful for:', dbUser.email);
+        console.log('✅ Hub SSO login successful:', {
+            email: dbUser.email,
+            role: dbUser.role,
+            redirectTarget
+        });
         res.redirect(redirectUrl);
     } catch (error) {
-        console.error('❌ Hub SSO handoff error:', error);
-        res.redirect(`${frontendUrl}/?error=sso_failed`);
+        const centralLookupFailed = isCentralLookupError(error);
+        console.error('❌ Hub SSO handoff error:', {
+            email: payload.sub,
+            centralLookupFailed,
+            status: error?.response?.status,
+            path: error?.config?.url,
+            message: error?.message
+        });
+        res.redirect(`${frontendUrl}/?error=${centralLookupFailed ? 'sso_central_lookup_failed' : 'sso_failed'}`);
     }
 });
 
