@@ -43,10 +43,24 @@ const AuthCallback = () => {
                 const redirectParam = hashParams.get('redirect');
                 const safeRedirect = sanitizeRedirectPath(redirectParam);
                 const pendingRedirect = consumePendingRedirect();
-                const target = pendingRedirect || safeRedirect || getDefaultPostLoginPath(canonicalUser);
+                const target = safeRedirect || pendingRedirect || getDefaultPostLoginPath(canonicalUser);
+
+                console.info('Auth callback redirect resolved', {
+                    authMethod: canonicalUser.authMethod || null,
+                    redirectParam,
+                    safeRedirect,
+                    pendingRedirect,
+                    target
+                });
 
                 // Remove sensitive token/user params from URL before leaving callback route
                 window.history.replaceState({}, document.title, '/auth/callback');
+                if (safeRedirect === '/select-role') {
+                    window.sessionStorage.removeItem('pending_auth_redirect');
+                    window.sessionStorage.setItem('hub_sso_select_role_redirect', '1');
+                    window.location.replace('/select-role');
+                    return;
+                }
                 navigate(target, { replace: true });
 
             } catch (error) {
