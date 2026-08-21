@@ -10,13 +10,13 @@ const AUDIENCE = 'daily-checkin';
 // window. Throws on any failure - callers redirect to a generic error page,
 // never leak which specific check failed to the browser.
 function verifyHubRelayToken(token) {
-    const secret = process.env.HUB_SSO_SECRET;
-    if (!secret) {
-        throw new Error('HUB_SSO_SECRET is not configured');
+    const publicKey = process.env.HUB_SSO_PUBLIC_KEY?.replace(/\\n/g, '\n');
+    if (!publicKey) {
+        throw new Error('HUB_SSO_PUBLIC_KEY is not configured');
     }
 
-    const payload = jwt.verify(token, secret, {
-        algorithms: ['HS256'],
+    const payload = jwt.verify(token, publicKey, {
+        algorithms: ['RS256'],
         issuer: ISSUER,
         audience: AUDIENCE,
     });
