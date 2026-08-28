@@ -21,9 +21,9 @@ const TRUST = [
   { icon: Smartphone, text: 'PWA Ready' },
 ];
 
-// Codes set by backend redirects (auth.js /google/callback, AuthCallback.jsx)
-// after a failed login - none of these were surfaced to the user before,
-// they just landed back here silently.
+// Codes set by backend redirects (auth.js's /sso Hub relay handoff,
+// AuthCallback.jsx) after a failed login - none of these were surfaced to
+// the user before, they just landed back here silently.
 const OAUTH_ERROR_MESSAGES = {
   central_inactive: 'Your account is inactive in the central database. Contact an administrator.',
   central_lookup_failed: "Couldn't verify your account with the central database. Please try again shortly.",
@@ -62,9 +62,11 @@ const HeroSection = memo(() => {
   }, [toast]);
 
   const handleGoogleSignIn = useCallback(() => {
-    const apiBase = import.meta.env.VITE_API_BASE || "/api/v1";
-    const backendUrl = apiBase.replace(/\/api(?:\/v\d+)?\/?$/, "");
-    window.location.href = `${backendUrl}/auth/google`;
+    // Hub is the single SSO entry point - it authenticates with Google
+    // itself and relays a signed token here, rather than this app running
+    // its own separate Google OAuth flow.
+    const hubBaseUrl = import.meta.env.VITE_HUB_BASE_URL || "http://localhost:5175";
+    window.location.href = `${hubBaseUrl.replace(/\/$/, "")}/apps/daily-checkin/launch`;
   }, []);
 
   const handleEmailLogin = useCallback(async (e) => {

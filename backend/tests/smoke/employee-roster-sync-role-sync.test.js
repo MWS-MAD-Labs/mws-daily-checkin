@@ -47,10 +47,32 @@ describe('employeeRosterSync role sync', () => {
     jest.clearAllMocks();
   });
 
-  test('promotes a staff-role user when central job_level is more specific', async () => {
+  // Role is deliberately no longer touched by this job - it's derived
+  // fresh from Hub's relayed access tags at login time
+  // (ssoUserResolution.js's deriveRoleFromCentralTags), which this
+  // background job has no access to (it talks to Central directly, Hub
+  // isn't involved). Re-deriving it from job_level alone here would
+  // silently drift back to the old dictionary-only behavior, and
+  // reintroduce the "second interpretation of Central data" problem tags
+  // exist to avoid - so these three cases now assert the opposite of what
+  // they used to.
+  test('leaves a staff-role user\'s role untouched even when central job_level is more specific', async () => {
     const user = makeUser({ role: 'staff' });
     mockUserFind.mockResolvedValue([user]);
     mockListActiveEmployees.mockResolvedValue([makeEmployee({ job_level: 'Teacher' })]);
+
+    await syncEmployeeRoster();
+
+    expect(user.role).toBe('staff');
+    // jobLevel itself still syncs from central - just not role.
+    expect(user.jobLevel).toBe('Teacher');
+    expect(user.save).toHaveBeenCalled();
+  });
+
+  test('leaves a teacher-role user\'s role untouched even when central job_level reverts to Staff', async () => {
+    const user = makeUser({ role: 'teacher', jobLevel: 'Teacher' });
+    mockUserFind.mockResolvedValue([user]);
+    mockListActiveEmployees.mockResolvedValue([makeEmployee({ job_level: 'Staff' })]);
 
     await syncEmployeeRoster();
 
@@ -58,25 +80,14 @@ describe('employeeRosterSync role sync', () => {
     expect(user.save).toHaveBeenCalled();
   });
 
-  test('demotes a teacher-role user when central job_level reverts to Staff', async () => {
-    const user = makeUser({ role: 'teacher', jobLevel: 'Teacher' });
-    mockUserFind.mockResolvedValue([user]);
-    mockListActiveEmployees.mockResolvedValue([makeEmployee({ job_level: 'Staff' })]);
-
-    await syncEmployeeRoster();
-
-    expect(user.role).toBe('staff');
-    expect(user.save).toHaveBeenCalled();
-  });
-
-  test('overwrites a manually-set counselor role to match central job_level (accepted tradeoff)', async () => {
+  test('leaves a manually-set counselor role untouched regardless of central job_level', async () => {
     const user = makeUser({ role: 'counselor' });
     mockUserFind.mockResolvedValue([user]);
     mockListActiveEmployees.mockResolvedValue([makeEmployee({ job_level: 'Head Unit' })]);
 
     await syncEmployeeRoster();
 
-    expect(user.role).toBe('head_unit');
+    expect(user.role).toBe('counselor');
     expect(user.save).toHaveBeenCalled();
   });
 

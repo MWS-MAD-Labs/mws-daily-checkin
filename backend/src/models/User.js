@@ -12,10 +12,22 @@ const userSchema = new mongoose.Schema({
     password: {
         type: String,
         required: function () {
-            // Password is required only if not using Google OAuth
-            return !this.googleId;
+            // Not required for Google OAuth accounts, nor for accounts
+            // provisioned through Hub's SSO relay - those never get a
+            // googleId (there's no Google profile to link, just an email
+            // assertion), so without this second flag they'd fail this
+            // required check and never save.
+            return !this.googleId && !this.ssoProvisioned;
         },
         minlength: 6
+    },
+    // Set when this account was created or last touched by Hub's SSO relay
+    // (see ssoUserResolution.js) rather than local email/password signup or
+    // direct Google OAuth. Exists so password's required check above can
+    // tell the two apart from googleId alone.
+    ssoProvisioned: {
+        type: Boolean,
+        default: false
     },
     name: {
         type: String,
