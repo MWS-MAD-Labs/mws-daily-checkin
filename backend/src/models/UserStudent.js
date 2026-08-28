@@ -12,9 +12,15 @@ const studentUserSchema = new mongoose.Schema({
     password: {
         type: String,
         required: function () {
-            return !this.googleId;
+            // Not required for Google OAuth accounts, nor for accounts
+            // provisioned through Hub's SSO relay - see User.js for why.
+            return !this.googleId && !this.ssoProvisioned;
         },
         minlength: 6
+    },
+    ssoProvisioned: {
+        type: Boolean,
+        default: false
     },
     name: {
         type: String,
