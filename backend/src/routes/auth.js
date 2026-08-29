@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const helmet = require('helmet');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const UserStudent = require('../models/UserStudent');
@@ -27,11 +28,17 @@ const isCentralLookupError = (error) => {
 // Hub token-relay SSO handoff. Hub already authenticated the user (its own
 // Google login) and mints a short-lived, single-use, audience-scoped token
 // asserting "this email"; we never trust anything beyond that email claim -
-// every profile field still comes fresh from mws-data-center, same as the
-// Google OAuth path above. On any failure this falls back to the same
-// generic error redirects the OAuth flow already uses, so a failed relay
-// token can't be distinguished from a failed OAuth attempt by the browser.
-router.get('/sso', ssoLimiter, async (req, res) => {
+// every profile field still comes fresh from mws-data-center.
+//
+// app.js's global helmet() defaults Cross-Origin-Opener-Policy to
+// 'same-origin'. That header forces the browser to sever this navigation
+// into a brand-new browsing-context group, which breaks Hub's
+// window.open("", name) tab-reuse trick (see mws-hub's AppCard.tsx) -
+// every relaunch reopens a fresh tab instead of finding and refreshing the
+// one already open, no matter what name Hub asks for. Scope the
+// relaxation to just this transient redirect hop rather than touching the
+// app-wide default.
+router.get('/sso', helmet.crossOriginOpenerPolicy({ policy: 'unsafe-none' }), ssoLimiter, async (req, res) => {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
     const { token } = req.query;
 
