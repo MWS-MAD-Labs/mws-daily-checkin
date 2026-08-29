@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import AppHelmet from '@/components/app/AppHelmet';
 import RouteConfig from '@/components/app/RouteConfig';
+import { useCrossTabAuthSync } from '@/hooks/useCrossTabAuthSync';
 
 const BackgroundDecor = lazy(() => import('@/components/app/BackgroundDecor'));
 const WorkforceHumanisticLayer = lazy(() => import('@/components/app/WorkforceHumanisticLayer'));
@@ -19,6 +20,8 @@ const App = memo(() => {
     const navigate = useNavigate();
     const aosRef = useRef(null);
     const [showEnhancements, setShowEnhancements] = useState(false);
+
+    useCrossTabAuthSync();
 
     useEffect(() => {
         let isDisposed = false;
