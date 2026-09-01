@@ -1,7 +1,7 @@
 const axios = require("axios");
 
-const BASE_URL = process.env.MWS_DATA_CENTER_API_URL || process.env.CENTRAL_API_BASE_URL;
-const API_TOKEN = process.env.MWS_DATA_CENTER_API_TOKEN || process.env.CENTRAL_API_TOKEN;
+const BASE_URL = process.env.MWS_DATA_CENTER_API_URL;
+const API_TOKEN = process.env.MWS_DATA_CENTER_API_TOKEN;
 
 const client = axios.create({
   baseURL: BASE_URL,
