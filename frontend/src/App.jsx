@@ -1,9 +1,8 @@
 import { Suspense, lazy, memo, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import AppHelmet from '@/components/app/AppHelmet';
 import RouteConfig from '@/components/app/RouteConfig';
-import { useCrossTabAuthSync } from '@/hooks/useCrossTabAuthSync';
 
 const BackgroundDecor = lazy(() => import('@/components/app/BackgroundDecor'));
 const WorkforceHumanisticLayer = lazy(() => import('@/components/app/WorkforceHumanisticLayer'));
@@ -13,15 +12,11 @@ const GlobalLoadingOverlay = lazy(() => import('@/components/app/GlobalLoadingOv
 const QuickLogoutButton = lazy(() => import('@/components/app/QuickLogoutButton'));
 
 const routeMatches = (pathname, prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`);
-const HUB_SSO_SELECT_ROLE_REDIRECT_KEY = 'hub_sso_select_role_redirect';
 
 const App = memo(() => {
     const location = useLocation();
-    const navigate = useNavigate();
     const aosRef = useRef(null);
     const [showEnhancements, setShowEnhancements] = useState(false);
-
-    useCrossTabAuthSync();
 
     useEffect(() => {
         let isDisposed = false;
@@ -63,14 +58,6 @@ const App = memo(() => {
     useEffect(() => {
         aosRef.current?.refresh();
     }, [location.pathname]);
-
-    useEffect(() => {
-        if (location.pathname !== '/support-hub') return;
-        if (window.sessionStorage.getItem(HUB_SSO_SELECT_ROLE_REDIRECT_KEY) !== '1') return;
-
-        window.sessionStorage.removeItem(HUB_SSO_SELECT_ROLE_REDIRECT_KEY);
-        navigate('/select-role', { replace: true });
-    }, [location.pathname, navigate]);
 
     useEffect(() => {
         let disposed = false;

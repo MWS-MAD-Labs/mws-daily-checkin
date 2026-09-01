@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { loginSuccess } from '../store/slices/authSlice';
@@ -8,17 +8,8 @@ import { consumePendingRedirect, getDefaultPostLoginPath, sanitizeRedirectPath }
 const AuthCallback = () => {
     const navigate = useNavigate();
     const dispatch = useDispatch();
-    // StrictMode double-invokes this effect in dev (mount, cleanup, mount
-    // again). The first run consumes the hash and strips it via
-    // history.replaceState below - the second run then reads an
-    // already-empty hash, sees no token, and navigates to the error page
-    // right after the first run already navigated to the real destination.
-    const hasHandledRef = useRef(false);
 
     useEffect(() => {
-        if (hasHandledRef.current) return;
-        hasHandledRef.current = true;
-
         const handleCallback = async () => {
             try {
                 const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
@@ -52,24 +43,10 @@ const AuthCallback = () => {
                 const redirectParam = hashParams.get('redirect');
                 const safeRedirect = sanitizeRedirectPath(redirectParam);
                 const pendingRedirect = consumePendingRedirect();
-                const target = safeRedirect || pendingRedirect || getDefaultPostLoginPath(canonicalUser);
-
-                console.info('Auth callback redirect resolved', {
-                    authMethod: canonicalUser.authMethod || null,
-                    redirectParam,
-                    safeRedirect,
-                    pendingRedirect,
-                    target
-                });
+                const target = pendingRedirect || safeRedirect || getDefaultPostLoginPath(canonicalUser);
 
                 // Remove sensitive token/user params from URL before leaving callback route
                 window.history.replaceState({}, document.title, '/auth/callback');
-                if (safeRedirect === '/select-role') {
-                    window.sessionStorage.removeItem('pending_auth_redirect');
-                    window.sessionStorage.setItem('hub_sso_select_role_redirect', '1');
-                    window.location.replace('/select-role');
-                    return;
-                }
                 navigate(target, { replace: true });
 
             } catch (error) {

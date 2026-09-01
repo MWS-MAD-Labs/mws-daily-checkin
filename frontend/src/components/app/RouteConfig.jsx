@@ -25,7 +25,7 @@ const PersonalStatsPage = lazy(() => import(/* webpackPrefetch: true */ '@/pages
 const EmotionalHistoryPage = lazy(() => import(/* webpackPrefetch: true */ '@/pages/EmotionalHistoryPage'));
 const EmotionalPatternsPage = lazy(() => import(/* webpackPrefetch: true */ '@/pages/EmotionalPatternsPage'));
 const UserManagementDashboard = lazy(() => import(/* webpackPrefetch: true */ '@/pages/UserManagementDashboard'));
-const SupportHubPage = lazy(() => import(/* webpackPrefetch: true */ '@/pages/hub/SupportHubPage'));
+const SupportModeSelectionPage = lazy(() => import(/* webpackPrefetch: true */ '@/pages/mtss/SupportModeSelectionPage'));
 const StudentEmotionalCheckinPage = lazy(() => import(/* webpackPrefetch: true */ '@/pages/StudentEmotionalCheckinPage'));
 const StudentFaceScanPage = lazy(() => import('@/pages/StudentFaceScanPage'));
 const StudentManualCheckinPage = lazy(() => import(/* webpackPrefetch: true */ '@/pages/StudentManualCheckinPage'));
@@ -101,7 +101,7 @@ const publicRoutes = [
     <Route key="emotional-patterns" path="/profile/emotional-patterns" element={<ProtectedRoute><MemoizedPageTransition><EmotionalPatternsPage /></MemoizedPageTransition></ProtectedRoute>} />,
     <Route key="emotional-patterns-user" path="/profile/emotional-patterns/:userId" element={<ProtectedRoute><MemoizedPageTransition><EmotionalPatternsPage /></MemoizedPageTransition></ProtectedRoute>} />,
     <Route key="user-management" path="/user-management" element={<AdminProtectedRoute><UserManagementDashboard /></AdminProtectedRoute>} />,
-    <Route key="support-hub" path="/support-hub" element={<ProtectedRoute allowedRoles={['staff', 'support_staff', 'nurse', 'counselor', 'teacher', 'se_teacher', 'head_unit', 'principal', 'directorate', 'admin', 'superadmin']}><MemoizedPageTransition><SupportHubPage /></MemoizedPageTransition></ProtectedRoute>} />,
+    <Route key="support-hub" path="/support-hub" element={<ProtectedRoute allowedRoles={['staff', 'support_staff', 'nurse', 'counselor', 'teacher', 'se_teacher', 'head_unit', 'principal', 'directorate', 'admin', 'superadmin']}><MemoizedPageTransition><SupportModeSelectionPage /></MemoizedPageTransition></ProtectedRoute>} />,
     <Route key="student-emotional-checkin" path="/student/emotional-checkin" element={<ProtectedRoute allowedRoles={['student']}><MemoizedPageTransition><StudentEmotionalCheckinPage /></MemoizedPageTransition></ProtectedRoute>} />,
     <Route key="student-face-scan" path="/student/emotional-checkin/face-scan" element={<ProtectedRoute allowedRoles={['student']}><MemoizedPageTransition><StudentFaceScanPage /></MemoizedPageTransition></ProtectedRoute>} />,
     <Route key="student-manual-checkin" path="/student/emotional-checkin/manual" element={<ProtectedRoute allowedRoles={['student']}><MemoizedPageTransition><StudentManualCheckinPage /></MemoizedPageTransition></ProtectedRoute>} />,

@@ -1,6 +1,7 @@
 const winston = require('winston');
 const User = require('../models/User');
 const { listActiveEmployees } = require('../services/mwsDataCenterClient');
+const { mapJobLevelToRole } = require('../utils/jobLevelRoleMapping');
 
 // authenticate() (middleware/auth.js) only checks the local isActive flag,
 // never mws-data-center directly - it only gets re-synced from central at
@@ -60,14 +61,14 @@ async function syncEmployeeRoster() {
 
     for (const user of candidates) {
         const employee = rosterByEmail.get(normalizeEmail(user.email));
-        // role deliberately isn't touched here - it's derived fresh from
-        // Hub's relayed access tags at login time (ssoUserResolution.js),
-        // which this background job has no access to (it talks to Central
-        // directly, Hub isn't involved). Re-deriving it from job_level
-        // alone here would silently drift back to the old dictionary-only
-        // behavior this job used to have, and reintroduce the exact "second
-        // interpretation of Central data" problem tags exist to avoid.
         const nextFields = employee ? buildFieldsFromCentral(employee) : { isActive: false };
+
+        if (employee) {
+            const mappedRole = mapJobLevelToRole(employee.job_level);
+            if (mappedRole) {
+                nextFields.role = mappedRole;
+            }
+        }
 
         if (!hasChanges(user, nextFields)) continue;
 
