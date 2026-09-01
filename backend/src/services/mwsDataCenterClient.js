@@ -1,7 +1,10 @@
 const axios = require("axios");
 
-const BASE_URL = process.env.MWS_DATA_CENTER_API_URL;
-const API_TOKEN = process.env.MWS_DATA_CENTER_API_TOKEN;
+// Komodo's env for this service now names these CENTRAL_API_* - keep the
+// old MWS_DATA_CENTER_API_* names as a fallback for any environment that
+// hasn't been renamed yet.
+const BASE_URL = process.env.MWS_DATA_CENTER_API_URL || process.env.CENTRAL_API_BASE_URL;
+const API_TOKEN = process.env.MWS_DATA_CENTER_API_TOKEN || process.env.CENTRAL_API_TOKEN;
 
 const client = axios.create({
   baseURL: BASE_URL,
