@@ -62,11 +62,9 @@ const HeroSection = memo(() => {
   }, [toast]);
 
   const handleGoogleSignIn = useCallback(() => {
-    // Hub is the single SSO entry point - it authenticates with Google
-    // itself and relays a signed token here, rather than this app running
-    // its own separate Google OAuth flow.
-    const hubBaseUrl = import.meta.env.VITE_HUB_BASE_URL || "http://localhost:5175";
-    window.location.href = `${hubBaseUrl.replace(/\/$/, "")}/apps/daily-checkin/launch`;
+    const apiBase = import.meta.env.VITE_API_BASE || "/api/v1";
+    const backendUrl = apiBase.replace(/\/api(?:\/v\d+)?\/?$/, "");
+    window.location.href = `${backendUrl}/auth/google`;
   }, []);
 
   const handleEmailLogin = useCallback(async (e) => {

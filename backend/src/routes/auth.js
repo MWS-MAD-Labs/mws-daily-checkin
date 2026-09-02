@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const helmet = require('helmet');
+const passport = require('../config/googleOAuth');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const UserStudent = require('../models/UserStudent');
@@ -12,9 +13,29 @@ const { verifyHubRelayToken } = require('../utils/hubSsoRelay');
 const { resolveOrProvisionSsoUser } = require('../utils/ssoUserResolution');
 const { createUserAwareRateLimiter } = require('../middleware/rateLimiter');
 
+// Session middleware is only needed for Google OAuth flow.
+// Email/password login and JWT-based routes do not require sessions.
+const buildOAuthMiddleware = () => {
+    const secret = process.env.SESSION_SECRET || process.env.JWT_SECRET;
+    if (!secret) return [];
+    return [
+        require('express-session')({ secret, resave: false, saveUninitialized: false }),
+        passport.initialize(),
+        passport.session()
+    ];
+};
+const oauthMiddleware = buildOAuthMiddleware();
+
 // Tighter than the general apiLimiter (which skips /v1/auth entirely) -
 // this is a sensitive auth entry point, not a regular auth check.
 const ssoLimiter = createUserAwareRateLimiter({ windowMinutes: 1, max: 20, skip: () => false });
+
+function resolveOAuthFailureRedirect(info) {
+    if (info?.message === 'central_inactive') {
+        return '/account-not-found';
+    }
+    return `/?error=${encodeURIComponent(info?.message || 'oauth_failed')}`;
+}
 
 const isCentralLookupError = (error) => {
     const baseUrl = error?.config?.baseURL;
@@ -24,6 +45,124 @@ const isCentralLookupError = (error) => {
         (typeof path === 'string' && /^\/(employees|students)\//.test(path))
     );
 };
+
+const ensureGoogleOAuthConfigured = (req, res, next) => {
+    if (passport.googleOAuthConfigured) {
+        return next();
+    }
+
+    const missingVariables = passport.googleOAuthStatus?.missingVariables || [];
+    const callbackURL = passport.googleOAuthStatus?.callbackURL || null;
+
+    return sendError(
+        res,
+        `Google OAuth is not configured${missingVariables.length ? `: missing ${missingVariables.join(', ')}` : ''}`,
+        503,
+        {
+            missingVariables,
+            callbackURL
+        }
+    );
+};
+
+router.get('/google',
+    ...oauthMiddleware,
+    ensureGoogleOAuthConfigured,
+    passport.authenticate('google', {
+        scope: ['profile', 'email'],
+        hd: 'millennia21.id'
+    })
+);
+
+router.get('/google/callback',
+    ...oauthMiddleware,
+    ensureGoogleOAuthConfigured,
+    (req, res, next) => {
+        passport.authenticate('google', (err, user, info) => {
+            if (err) {
+                console.error('❌ Google OAuth error:', err);
+                return res.redirect('/?error=oauth_failed');
+            }
+            if (!user) {
+                return res.redirect(resolveOAuthFailureRedirect(info));
+            }
+            req.logIn(user, (loginErr) => {
+                if (loginErr) {
+                    console.error('❌ Google OAuth session login error:', loginErr);
+                    return res.redirect('/?error=oauth_failed');
+                }
+                next();
+            });
+        })(req, res, next);
+    },
+    async (req, res) => {
+        try {
+            console.log('✅ Google OAuth successful for user:', req.user.email);
+
+            const userModel = req.user?.constructor?.modelName === 'UserStudent' ? UserStudent : User;
+            const dbUser = await userModel.findById(req.user._id).select('-password -googleProfile');
+
+            if (!dbUser) {
+                console.error('❌ User not found in database after OAuth:', req.user.email);
+                return res.redirect('/?error=user_not_found');
+            }
+
+            if (!dbUser.isActive) {
+                console.error('❌ Inactive user attempted OAuth login:', req.user.email);
+                return res.redirect('/?error=account_inactive');
+            }
+
+            dbUser.lastLogin = new Date();
+            await dbUser.save();
+
+            const token = jwt.sign(
+                {
+                    userId: dbUser._id,
+                    email: dbUser.email,
+                    role: dbUser.role
+                },
+                process.env.JWT_SECRET,
+                { expiresIn: '7d' }
+            );
+
+            const userDataForFrontend = {
+                ...buildRequestUser(dbUser),
+                lastLogin: dbUser.lastLogin,
+                isActive: dbUser.isActive,
+                emailVerified: dbUser.emailVerified,
+                validatedAt: new Date().toISOString(),
+                authMethod: 'google_oauth'
+            };
+
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
+            const redirectTarget = dbUser.role === 'student'
+                ? '/emotional-checkin'
+                : (userDataForFrontend.mtssAccess?.hasAccess ? '/support-hub' : '/select-role');
+            const redirectUrl = `${frontendUrl}/auth/callback#token=${encodeURIComponent(token)}&user=${encodeURIComponent(JSON.stringify(userDataForFrontend))}&redirect=${encodeURIComponent(redirectTarget)}`;
+
+            console.log('🌐 OAuth redirect config:', {
+                FRONTEND_URL_ENV: process.env.FRONTEND_URL || 'NOT SET (using fallback)',
+                NODE_ENV: process.env.NODE_ENV || 'NOT SET',
+                frontendUrl,
+                redirectTarget
+            });
+
+            console.log('📋 User role for dashboard access:', {
+                role: dbUser.role,
+                dashboardRole: userDataForFrontend.dashboardRole,
+                delegatedFrom: userDataForFrontend.dashboardAccess?.delegatedFromEmail || null,
+                hasDashboardAccess: hasDashboardAccess(userDataForFrontend),
+                hasMtssAccess: hasMtssAccess(userDataForFrontend),
+                mtssRole: userDataForFrontend.mtssRole || null
+            });
+
+            res.redirect(redirectUrl);
+        } catch (error) {
+            console.error('❌ OAuth callback error:', error);
+            res.redirect('/?error=oauth_failed');
+        }
+    }
+);
 
 // Hub token-relay SSO handoff. Hub already authenticated the user (its own
 // Google login) and mints a short-lived, single-use, audience-scoped token
