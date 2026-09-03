@@ -344,7 +344,7 @@ router.get('/logout-silent', (req, res) => {
     res.removeHeader('X-Frame-Options');
     res.setHeader('Content-Security-Policy', `frame-ancestors 'self'${hubOrigin ? ` ${hubOrigin}` : ''}`);
     res.type('html').send(
-        `<!doctype html><html><body><script>try{localStorage.removeItem('auth_token');localStorage.removeItem('auth_user');}catch(e){}</script></body></html>`
+        `<!doctype html><html><body><script>try{localStorage.removeItem('daily.auth_token');localStorage.removeItem('daily.auth_user');sessionStorage.removeItem('daily.auth_token');sessionStorage.removeItem('daily.auth_user');}catch(e){}</script></body></html>`
     );
 });
 
