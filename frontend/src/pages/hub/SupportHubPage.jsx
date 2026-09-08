@@ -1,19 +1,102 @@
-import { memo, useEffect } from "react";
-import PageLoader from "@/components/PageLoader";
+import { memo, useCallback } from "react";
+import { useSelector } from "react-redux";
+import HubHeader from "./components/HubHeader";
+import HubIntro from "./components/HubIntro";
+import HubSearch from "./components/HubSearch";
+import CategoryFilter from "./components/CategoryFilter";
+import AppCard from "./components/AppCard";
+import HubEmptyState from "./components/HubEmptyState";
+import { AppCardSkeletonGrid } from "./components/AppCardSkeleton";
+import { HUB_GRID_CLASS } from "./components/hubGrid";
+import useHubCatalog from "./hooks/useHubCatalog";
+import { toast } from "@/components/ui/use-toast";
 
-// This used to be a full app-picker (search, categories, app cards) - a
-// second, duplicate copy of Hub's own catalog. Hub is the single place
-// people launch apps from now (see mws-hub), so staff landing here (it's
-// still getDefaultPostLoginPath's default for most staff roles - see
-// utils/authRedirect.js) get sent straight there instead of into a stale
-// copy of the same list.
+const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL || "admin@millennia21.id";
+
 const SupportHubPage = memo(() => {
-    useEffect(() => {
-        const hubBaseUrl = import.meta.env.VITE_HUB_BASE_URL || "http://localhost:5175";
-        window.location.href = hubBaseUrl.replace(/\/$/, "");
+    const { user } = useSelector((state) => state.auth);
+    const {
+        isLoading,
+        hasError,
+        categories,
+        activeCategory,
+        query,
+        isFiltering,
+        visibleApplications,
+        lockedCount,
+        hasCatalog,
+        setQuery,
+        setCategory,
+        clearFilters,
+        retry,
+    } = useHubCatalog(user);
+
+    const handleRequestAccess = useCallback((app) => {
+        toast({
+            title: "Access request noted",
+            description: `Requesting access to ${app.name}. This is a mock action - no request has been sent yet.`,
+        });
     }, []);
 
-    return <PageLoader />;
+    const isSettled = !isLoading && !hasError;
+    const showNoResults = isSettled && hasCatalog && visibleApplications.length === 0;
+    const showEmptyCatalog = isSettled && !hasCatalog;
+
+    return (
+        <div className="min-h-screen bg-background text-foreground">
+            <HubHeader user={user} />
+
+            <main className="mx-auto max-w-[1600px] px-4 py-7 sm:px-6 sm:py-9">
+                <HubIntro />
+
+                <div className="mt-5 max-w-xl">
+                    <HubSearch query={query} onQueryChange={setQuery} />
+                </div>
+
+                <div className="mt-4 border-b border-border/40 pb-3">
+                    <CategoryFilter
+                        categories={categories}
+                        activeCategory={activeCategory}
+                        onSelect={setCategory}
+                    />
+                </div>
+
+                <section className="mt-6">
+                    <div className="mb-3 flex items-baseline gap-2">
+                        <h2 className="text-sm font-medium text-foreground">
+                            {isFiltering ? "Results" : "All applications"}
+                        </h2>
+                        {isSettled && (
+                            <p className="text-xs text-muted-foreground">
+                                {visibleApplications.length}
+                                {!isFiltering && lockedCount > 0 && ` · ${lockedCount} locked`}
+                            </p>
+                        )}
+                    </div>
+
+                    {isLoading && <AppCardSkeletonGrid count={12} />}
+
+                    {hasError && <HubEmptyState variant="error" onAction={retry} />}
+
+                    {showEmptyCatalog && (
+                        <HubEmptyState variant="no-apps" supportEmail={SUPPORT_EMAIL} />
+                    )}
+
+                    {showNoResults && (
+                        <HubEmptyState variant="no-results" query={query} onAction={clearFilters} />
+                    )}
+
+                    {isSettled && visibleApplications.length > 0 && (
+                        <div className={HUB_GRID_CLASS}>
+                            {visibleApplications.map((app) => (
+                                <AppCard key={app.id} app={app} onRequestAccess={handleRequestAccess} />
+                            ))}
+                        </div>
+                    )}
+                </section>
+            </main>
+        </div>
+    );
 });
 
 SupportHubPage.displayName = "SupportHubPage";

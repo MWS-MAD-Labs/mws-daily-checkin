@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { startGlobalLoading, stopGlobalLoading } from '@/lib/loadingManager';
+import { clearStoredAuthSession, getStoredAuthToken } from '@/utils/authStorage';
 
 // Default to versioned API to match backend routing
 const API_BASE_URL = import.meta.env.VITE_API_BASE || '/api/v1';
@@ -19,7 +20,7 @@ api.interceptors.request.use(
         if (!config?.skipGlobalLoading) {
             startGlobalLoading();
         }
-        const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+        const token = getStoredAuthToken();
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
@@ -66,9 +67,7 @@ api.interceptors.response.use(
                 ];
                 const shouldResetAuth = !msg || authFailureHints.some((hint) => msg.includes(hint));
                 if (shouldResetAuth) {
-                    localStorage.removeItem('auth_token');
-                    localStorage.removeItem('auth_user');
-                    localStorage.removeItem('token');
+                    clearStoredAuthSession();
                     if (typeof window !== 'undefined' && window.location.pathname !== '/') {
                         window.location.assign('/');
                     }
@@ -87,6 +86,8 @@ export const login = async (email, password) => {
 
 export const logout = async () => {
     const response = await api.post('/auth/logout');
+
+    clearStoredAuthSession();
 
     // The backend tells us where to go so the Hub session ends too. It has to
     // be a real navigation: Hub's cookie lives on Hub's domain, so nothing
