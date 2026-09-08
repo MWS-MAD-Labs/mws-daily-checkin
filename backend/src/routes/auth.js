@@ -55,7 +55,10 @@ router.get('/sso', helmet.crossOriginOpenerPolicy({ policy: 'unsafe-none' }), ss
     }
 
     try {
-        const dbUser = await resolveOrProvisionSsoUser(payload.sub, { tags: payload.tags });
+        const dbUser = await resolveOrProvisionSsoUser(payload.sub, {
+          tags: payload.tags,
+          source: payload.source,
+        });
 
         if (!dbUser) {
             console.log('❌ No active central record for Hub SSO email:', payload.sub);

@@ -13,30 +13,14 @@ function nextRole(derivedRole, existingRole) {
     return derivedRole || existingRole || 'staff';
 }
 
-// Resolves (or auto-provisions) a local user record for an email Hub has
-// already authenticated via its own Google login. Mirrors
-// googleOAuthVerify's central-lookup-first resolution order (student, then
-// staff) minus the Google-profile-specific bits - there's no googleId to
-// link here, and every field still comes from mws-data-center, never from
-// the relay token itself (only the access-tag verdict is trusted from the
-// token - see mws-hub's sso-relay.ts for why). Returns the saved user doc,
-// or null if the email has no active record in either the local DB or
-// Central.
-async function resolveOrProvisionSsoUser(rawEmail, relayClaims = {}) {
-    const email = normalizeEmail(rawEmail);
-    if (!email) return null;
-
-    const tags = Array.isArray(relayClaims.tags) ? relayClaims.tags : [];
-
+// Always re-verifies against Central, even when a local UserStudent record
+// already exists - Central is the only thing that gets to say whether this
+// email is currently a student. Returns the UserStudent doc if Central
+// confirms it, otherwise null (after deactivating a now-stale local record,
+// when Central's answer was a confident "no" rather than a lookup failure).
+async function tryResolveAsStudent(email) {
     let userStudent = await UserStudent.findOne({ email });
 
-    // Always re-verify against Central, even when a local UserStudent
-    // record already exists - Central is the only thing that gets to say
-    // whether this email is currently a student. Without this, an email
-    // that was ever auto-provisioned as a student (a data mistake, or a
-    // real person who changed from student to staff) would keep coming
-    // back here forever, never reaching the employee check below no
-    // matter what Central says now.
     let centralStudentFields = null;
     let studentLookupFailed = false;
     try {
@@ -65,11 +49,9 @@ async function resolveOrProvisionSsoUser(rawEmail, relayClaims = {}) {
         return userStudent;
     }
 
-    // Central doesn't currently say this email is a student. A lookup
-    // error is treated as "couldn't check" rather than "not a student" -
-    // if we already have a local record, keep trusting it rather than
-    // kicking someone out over a network hiccup; only fall through to the
-    // employee check when we're actually sure Central disagrees.
+    // A lookup error is treated as "couldn't check" rather than "not a
+    // student" - if we already have a local record, keep trusting it
+    // rather than kicking someone out over a network hiccup.
     if (studentLookupFailed) {
         if (userStudent) {
             userStudent.emailVerified = true;
@@ -78,13 +60,19 @@ async function resolveOrProvisionSsoUser(rawEmail, relayClaims = {}) {
             await userStudent.save();
             return userStudent;
         }
-    } else if (userStudent && userStudent.isActive) {
-        // Central confirmed this is no longer a student - deactivate the
-        // stale record instead of leaving it active but unreachable.
+        return null;
+    }
+
+    // Central confirmed this is no longer a student - deactivate the stale
+    // record instead of leaving it active but unreachable.
+    if (userStudent && userStudent.isActive) {
         userStudent.isActive = false;
         await userStudent.save();
     }
+    return null;
+}
 
+async function tryResolveAsEmployee(email, tags) {
     let user = await User.findOne({ email });
 
     // Staff identity is re-validated against Central on every login, same
@@ -95,7 +83,7 @@ async function resolveOrProvisionSsoUser(rawEmail, relayClaims = {}) {
         return null;
     }
 
-    const derivedRole = deriveRoleFromCentralTags(tags, centralFields.jobLevel);
+    const derivedRole = deriveRoleFromCentralTags(tags, centralFields.jobLevel, centralFields.jobPosition);
 
     if (user) {
         Object.assign(user, centralFields);
@@ -120,6 +108,53 @@ async function resolveOrProvisionSsoUser(rawEmail, relayClaims = {}) {
     });
     await user.save();
     return user;
+}
+
+// relayClaims.source ("employee"/"student") is Hub's own already-resolved
+// answer, stamped into the relay token at mint time (mws-hub already did
+// exactly this same Central lookup moments earlier - see
+// mws-hub/backend/src/lib/central-client.ts's resolveCentralIdentity).
+// Checking that one first means the common case (Hub's classification
+// still matches Central, true for the overwhelming majority of logins)
+// costs one Central call instead of two, and produces one Central audit
+// log entry instead of two - previously this always tried student, then
+// employee, regardless of source, so every single employee login logged a
+// student-lookup miss that told nobody anything.
+//
+// Still falls through to the other check when the hinted one comes up
+// empty, so a stale hint (Hub's classification lagging a very recent
+// Central change) self-corrects instead of failing the login outright.
+// One accepted trade-off: when source hints 'employee' and that check
+// succeeds (the common path), the stale-student-record deactivation inside
+// tryResolveAsStudent never runs for this login - a person who just
+// changed from student to employee keeps their old UserStudent record
+// active one login cycle longer than before. Central's own tags already
+// stop that record from granting anything meaningful, and the next login
+// that ever hints 'student' (or omits source) still catches it.
+async function resolveOrProvisionSsoUser(rawEmail, relayClaims = {}) {
+    const email = normalizeEmail(rawEmail);
+    if (!email) return null;
+
+    const tags = Array.isArray(relayClaims.tags) ? relayClaims.tags : [];
+    const source = relayClaims.source;
+
+    if (source === 'employee') {
+        const employeeResult = await tryResolveAsEmployee(email, tags);
+        if (employeeResult) return employeeResult;
+        return tryResolveAsStudent(email);
+    }
+
+    if (source === 'student') {
+        const studentResult = await tryResolveAsStudent(email);
+        if (studentResult) return studentResult;
+        return tryResolveAsEmployee(email, tags);
+    }
+
+    // No hint (relay claims omit source, or a caller other than the Hub
+    // relay flow) - fall back to the original student-first order.
+    const studentResult = await tryResolveAsStudent(email);
+    if (studentResult) return studentResult;
+    return tryResolveAsEmployee(email, tags);
 }
 
 module.exports = { resolveOrProvisionSsoUser, nextRole };

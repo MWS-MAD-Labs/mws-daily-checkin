@@ -45,15 +45,36 @@ const TEACHER_FAMILY_BY_JOB_LEVEL = {
     'Staff': 'staff',
 };
 
-function deriveRoleFromCentralTags(tags, jobLevel) {
+// job_position is free-text, admin-editable master data in Central, same
+// caveat as job_level above - only a handful of specific titles need their
+// own role distinct from the generic job_level bucket they'd otherwise fall
+// into. Currently just the school psychologist(s), who need Emotional
+// Check-in Dashboard access (see accessControl.js's DEFAULT_DASHBOARD_ROLES)
+// despite an ordinary Staff-level job_level. Was previously a single
+// hardcoded email in DASHBOARD_DELEGATIONS - moved here so it's derived
+// from Central's own job_position instead of needing a code change (and a
+// redeploy) every time this position changes hands.
+const JOB_POSITION_TO_ROLE = {
+    "school's psychologist": 'counselor',
+};
+
+function normalizeJobPosition(value) {
+    return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
+function deriveRoleFromCentralTags(tags, jobLevel, jobPosition) {
     const tagSet = new Set(Array.isArray(tags) ? tags : []);
     const level = typeof jobLevel === 'string' ? jobLevel.trim() : '';
+    const positionRole = JOB_POSITION_TO_ROLE[normalizeJobPosition(jobPosition)];
 
     if (tagSet.has('director')) return 'directorate';
     if (tagSet.has('head-unit') || tagSet.has('principal')) return 'head_unit';
     if (tagSet.has('admin')) return 'admin';
     if (tagSet.has('teacher') || tagSet.has('staff') || tagSet.has('employee')) {
-        return TEACHER_FAMILY_BY_JOB_LEVEL[level] || 'teacher';
+        // job_position (e.g. "School's Psychologist") wins over the plain
+        // job_level bucket when both are present - it's the more specific
+        // signal.
+        return positionRole || TEACHER_FAMILY_BY_JOB_LEVEL[level] || 'teacher';
     }
 
     return null;
@@ -63,5 +84,6 @@ module.exports = {
     JOB_LEVEL_TO_ROLE,
     mapJobLevelToRole,
     TEACHER_FAMILY_BY_JOB_LEVEL,
+    JOB_POSITION_TO_ROLE,
     deriveRoleFromCentralTags,
 };

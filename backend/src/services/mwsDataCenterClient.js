@@ -92,10 +92,30 @@ async function listStudentsByStatus(status) {
   return students;
 }
 
+// Same bulk-diff posture as listActiveEmployees() - walks every page,
+// throws on any page failure rather than returning a partial list.
+async function listClassTeacherAssignments() {
+  const assignments = [];
+  let page = 1;
+  let totalPages = 1;
+
+  do {
+    const { data } = await client.get("/class-teacher-assignments", {
+      params: { page, size: LIST_PAGE_SIZE },
+    });
+    assignments.push(...data.data);
+    totalPages = data.paging.total_page;
+    page += 1;
+  } while (page <= totalPages);
+
+  return assignments;
+}
+
 module.exports = {
   lookupEmployeeByEmail,
   listActiveEmployees,
   lookupStudentByEmail,
   listStudentsByStatus,
   getStudentSupportContacts,
+  listClassTeacherAssignments,
 };

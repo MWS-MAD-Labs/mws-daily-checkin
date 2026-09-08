@@ -168,42 +168,21 @@ const countUsersByRole = (users = []) => users.reduce((acc, user) => {
     return acc;
 }, {});
 
+// head_unit (Head of Unit/Care, etc.) sees every active employee company-
+// wide, same as directorate - not narrowed to their own unit. The function
+// still only returns something for head_unit (everyone else keeps calling
+// their own unrestricted path, or isn't gated through this at all), and
+// still excludes the viewer themselves from their own "other members" list.
 const resolveHeadUnitScopedUsers = async (viewer = {}) => {
     const viewerRole = getEffectiveDashboardRole(viewer);
-    const viewerUnit = viewer?.unit || viewer?.department || '';
     const viewerId = viewer?.id || viewer?._id || null;
-    const subordinateIds = Array.isArray(viewer?.subordinates)
-        ? viewer.subordinates.filter(Boolean)
-        : [];
 
     if (viewerRole !== 'head_unit') {
         return [];
     }
 
-    const scopeClauses = [];
-
-    if (viewerUnit) {
-        scopeClauses.push(
-            { unit: viewerUnit },
-            { department: viewerUnit }
-        );
-    }
-
-    if (viewerId) {
-        scopeClauses.push({ reportsTo: viewerId });
-    }
-
-    if (subordinateIds.length) {
-        scopeClauses.push({ _id: { $in: subordinateIds } });
-    }
-
-    if (!scopeClauses.length) {
-        return [];
-    }
-
     const scopedUsers = await User.find({
-        isActive: true,
-        $or: scopeClauses
+        isActive: true
     }).select('_id name email role department unit reportsTo subordinates');
 
     const viewerIdString = viewerId?.toString?.() || String(viewerId || '');
@@ -290,43 +269,18 @@ const getDashboardStats = async (req, res) => {
             console.log('🔍 Dashboard data access scope:', {
                 userRole: userRole,
                 userUnit: userUnit,
-                scope: userRole === 'directorate'
+                scope: ['directorate', 'head_unit', 'counselor'].includes(userRole)
                     ? 'ALL_EMPLOYEES'
-                    : userRole === 'head_unit'
-                        ? 'UNIT_AND_DIRECT_REPORTS'
-                        : 'UNIT_ONLY',
-                expectedData: userRole === 'directorate'
+                    : 'UNIT_ONLY',
+                expectedData: ['directorate', 'head_unit', 'counselor'].includes(userRole)
                     ? 'Comprehensive data for all employees across organization'
-                    : userRole === 'head_unit'
-                        ? `Team-specific data for ${userUnit || 'assigned'} members and direct reports`
-                        : `Unit-specific data for ${userUnit} employees only`
+                    : `Unit-specific data for ${userUnit} employees only`
             });
 
-            // For head_unit, temporarily allow access to all data (like directorate)
-            // TODO: Revert to unit-specific filtering when more data is available
-            // if (userRole === 'head_unit' && userUnit) {
-            //     console.log('🔍 Head Unit filtering:', { userRole, userUnit, userId: req.user.id });
-            //
-            //     const unitMembers = await User.find({
-            //         $or: [
-            //             { unit: userUnit },
-            //             { department: userUnit }
-            //         ]
-            //     }).select('_id name email unit department');
-            //
-            //     console.log('👥 Unit members found:', unitMembers.map(u => ({ name: u.name, unit: u.unit, department: u.department })));
-            //
-            //     if (unitMembers.length > 0) {
-            //         checkinQuery['userId'] = {
-            //             $in: unitMembers.map(u => u._id)
-            //         };
-            //         console.log('✅ Applied unit filtering for', unitMembers.length, 'members');
-            //     } else {
-            //         console.log('⚠️ No unit members found for unit:', userUnit);
-            //     }
-            // }
-
-            // Apply head_unit scoping to checkins if applicable
+            // head_unit and directorate both see every employee company-
+            // wide - resolveHeadUnitScopedUsers returns the full active
+            // roster for head_unit, so applying it here is a no-op filter,
+            // not a real restriction.
             if (userRole === 'head_unit') {
                 applyResolvedUserScope(checkinQuery, scopedUserIds);
             }
@@ -429,24 +383,10 @@ const getDashboardStats = async (req, res) => {
             }
 
             // Get all users for role-based statistics (filtered for head_unit)
-            let userQuery = {};
+            let userQuery = { isActive: true };
             if (userRole === 'head_unit') {
                 userQuery = { _id: { $in: scopedUserIds } };
             }
-            // For head_unit, temporarily allow access to all users (like directorate)
-            // TODO: Revert to unit-specific filtering when more data is available
-            // if (userRole === 'head_unit' && userUnit) {
-            //     console.log('🔍 Getting users for Head Unit statistics:', { userUnit });
-            //     userQuery = {
-            //         $or: [
-            //             { unit: userUnit },
-            //             { department: userUnit }
-            //         ]
-            //     };
-            //
-            //     const unitUsers = await User.find(userQuery, 'name role department unit');
-            //     console.log('👥 Unit users for statistics:', unitUsers.map(u => ({ name: u.name, unit: u.unit, department: u.department })));
-            // }
 
             const allUsers = userRole === 'head_unit'
                 ? scopedUnitUsers
@@ -647,8 +587,10 @@ const getDashboardStats = async (req, res) => {
             // Keep department breakdown for backward compatibility
             stats.departmentBreakdown = stats.unitBreakdown;
 
-            // Flagged users (needs support) - enhanced AI analysis with historical data
-            // For head_unit, only show flagged users from their unit who selected them as support contact
+            // Flagged users (needs support) - enhanced AI analysis with
+            // historical data. head_unit sees every flagged user company-
+            // wide, same as directorate - not narrowed to requests
+            // addressed to them specifically.
             const RESOLVED_STATUSES = new Set(['handled', 'success']);
             const flaggedCheckins = periodCheckins.filter(c => {
                 // Must not have been resolved yet
@@ -656,13 +598,6 @@ const getDashboardStats = async (req, res) => {
                     !RESOLVED_STATUSES.has(c.supportContactResponse.status);
 
                 if (!notHandled) return false;
-
-                // For head_unit, only show users who selected them as support contact
-                if (userRole === 'head_unit') {
-                    const selectedHeadUnit = c.supportContactUserId &&
-                        c.supportContactUserId._id.toString() === req.user.id;
-                    if (!selectedHeadUnit) return false;
-                }
 
                 // Enhanced AI analysis with multiple criteria
                 const aiAnalysis = c.aiAnalysis || {};
@@ -754,15 +689,10 @@ const getDashboardStats = async (req, res) => {
             });
 
             // Check-in requests (users who selected a support contact)
-            // For head_unit, only show requests directed to them
+            // head_unit sees every check-in request company-wide, same as
+            // directorate - not narrowed to ones addressed to them.
             const checkinRequests = periodCheckins.filter(c => {
-                if (!c.supportContactUserId || !c.supportContactUserId._id) return false;
-
-                if (userRole === 'head_unit') {
-                    return c.supportContactUserId._id.toString() === req.user.id;
-                }
-
-                return true; // Directorate sees all requests
+                return Boolean(c.supportContactUserId && c.supportContactUserId._id);
             });
 
             stats.checkinRequests = checkinRequests.map(checkin => {
@@ -811,24 +741,6 @@ const getDashboardStats = async (req, res) => {
             let recentActivityQuery = {
                 date: { $gte: startDate, $lt: rangeEndExclusive }
             };
-
-            // For head_unit, temporarily show all activity (like directorate)
-            // TODO: Revert to unit-specific filtering when more data is available
-            // if (userRole === 'head_unit' && userUnit) {
-            //     console.log('🔍 Filtering recent activity for Head Unit:', { userUnit });
-            //     const unitMembersForActivity = await User.find({
-            //         $or: [
-            //             { unit: userUnit },
-            //             { department: userUnit }
-            //         ]
-            //     }).select('_id name');
-            //
-            //     console.log('📊 Recent activity unit members:', unitMembersForActivity.map(u => u.name));
-            //
-            //     recentActivityQuery['userId'] = {
-            //         $in: unitMembersForActivity.map(u => u._id)
-            //     };
-            // }
 
             if (userRole === 'head_unit') {
                 applyResolvedUserScope(recentActivityQuery, scopedUserIds);
@@ -891,7 +803,7 @@ const getDashboardStats = async (req, res) => {
             // Generate insights
             stats.insights = generateInsights(stats, period);
 
-        const includeStaffDetail = ['head_unit', 'directorate', 'admin', 'superadmin'].includes(userRole);
+        const includeStaffDetail = ['head_unit', 'directorate', 'admin', 'superadmin', 'counselor'].includes(userRole);
         if (includeStaffDetail && allUsers.length > 0) {
             const memberList = allUsers.filter(member => member._id.toString() !== req.user.id);
                 const memberIds = memberList.map(member => member._id);
@@ -986,7 +898,7 @@ const getDashboardStats = async (req, res) => {
                         flaggedMembers,
                         submittedInPeriod: staffDetails.filter(member => (member.periodSummary?.submissions || 0) > 0).length
                     };
-                    stats.staffExplorerContext = userRole === 'head_unit' ? 'unit' : 'organization';
+                    stats.staffExplorerContext = 'organization';
                 }
             }
 
@@ -1133,15 +1045,8 @@ const getUserTrends = async (req, res) => {
             return sendError(res, 'User ID is required', 400);
         }
 
-        // Enforce access: head_unit can only access users in their unit/department
-        const requester = req.user;
-        if (requester.role === 'head_unit') {
-            const target = await User.findById(userId).select('unit department');
-            const unit = requester.unit || requester.department;
-            if (!target || (target.unit !== unit && target.department !== unit)) {
-                return sendError(res, 'Access denied for this user', 403);
-            }
-        }
+        // head_unit sees every employee company-wide, same as directorate -
+        // no per-unit access check here.
 
         const resolvedUserScope = buildResolvedUserScopeClause([userId]);
         const { startDate, endDate, rangeEndExclusive } = await resolveScopedDashboardWindow({
@@ -1417,21 +1322,14 @@ const getUserDashboardData = async (req, res) => {
             return sendError(res, 'User ID is required', 400);
         }
 
-        // Enforce access: head_unit can only access users in their unit/department
-        const requester = req.user;
-
         // Get user details
         const user = await User.findById(userId, 'name email role department unit');
         if (!user) {
             return sendError(res, 'User not found', 404);
         }
 
-        if (requester.role === 'head_unit') {
-            const unit = requester.unit || requester.department;
-            if (user.unit !== unit && user.department !== unit) {
-                return sendError(res, 'Access denied for this user', 403);
-            }
-        }
+        // head_unit sees every employee company-wide, same as directorate -
+        // no per-unit access check here.
 
         const resolvedUserScope = buildResolvedUserScopeClause([userId]);
         const { startDate, endDate, rangeEndExclusive } = await resolveScopedDashboardWindow({
@@ -1589,18 +1487,13 @@ const getUserCheckinHistory = async (req, res) => {
             return sendError(res, 'User ID is required', 400);
         }
 
-        const requesterRole = getEffectiveDashboardRole(req.user);
         const target = await User.findById(userId).select('unit department');
         if (!target) {
             return sendError(res, 'User not found', 404);
         }
 
-        if (requesterRole === 'head_unit') {
-            const unit = req.user.unit || req.user.department;
-            if (target.unit !== unit && target.department !== unit) {
-                return sendError(res, 'Access denied for this user', 403);
-            }
-        }
+        // head_unit sees every employee company-wide, same as directorate -
+        // no per-unit access check here.
 
         const checkins = await EmotionalCheckin.find({ userId })
             .sort({ date: -1 })
@@ -1770,8 +1663,8 @@ const getUnitMembers = async (req, res) => {
         console.log('👥 Unit members access scope:', {
             userRole: userRole,
             userUnit: userUnit,
-            scope: userRole === 'directorate' ? 'ALL_EMPLOYEES' : 'UNIT_ONLY',
-            expectedData: userRole === 'directorate'
+            scope: ['directorate', 'head_unit', 'counselor'].includes(userRole) ? 'ALL_EMPLOYEES' : 'UNIT_ONLY',
+            expectedData: ['directorate', 'head_unit', 'counselor'].includes(userRole)
                 ? 'All active employees across organization'
                 : `Active employees in ${userUnit} only`
         });
@@ -1779,13 +1672,15 @@ const getUnitMembers = async (req, res) => {
         // Build query based on user role
         let userQuery = { isActive: true };
 
-        // For head_unit, only show members from their unit/department
+        // head_unit sees every active employee company-wide, same as
+        // directorate - resolveHeadUnitScopedUsers returns the full active
+        // roster for head_unit, not a unit-narrowed subset.
         if (userRole === 'head_unit') {
             const scopedUsers = await resolveHeadUnitScopedUsers(req.user);
             userQuery = {
                 _id: { $in: scopedUsers.map((user) => user._id) }
             };
-            console.log('🔒 Applied unit/direct-report filtering for head_unit:', userUnit);
+            console.log('👥 head_unit viewing all active employees (organization-wide):', userUnit);
         }
         // For directorate and superadmin, show all users
         // No additional filtering needed
@@ -1878,11 +1773,11 @@ const getUnitMembers = async (req, res) => {
 
         // Add data scope information to response
         const dataScope = {
-            scope: userRole === 'directorate' ? 'ALL_EMPLOYEES' : 'UNIT_ONLY',
-            description: userRole === 'directorate'
+            scope: ['directorate', 'head_unit', 'counselor'].includes(userRole) ? 'ALL_EMPLOYEES' : 'UNIT_ONLY',
+            description: ['directorate', 'head_unit', 'counselor'].includes(userRole)
                 ? 'Comprehensive data for all active employees across the organization'
                 : `Unit-specific data for employees in ${userUnit}`,
-            totalOrganizations: userRole === 'directorate' ? 'All departments/units' : userUnit
+            totalOrganizations: ['directorate', 'head_unit', 'counselor'].includes(userRole) ? 'All departments/units' : userUnit
         };
 
         console.log(`📊 ${userRole === 'directorate' ? 'Ms. Mahrukh' : 'Head Unit'} access:`, {
