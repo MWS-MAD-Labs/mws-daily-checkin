@@ -12,6 +12,8 @@ const { initSocket } = require('./config/socket');
 const slackSocketService = require('./services/slackSocketService');
 const { createCorsOriginChecker, validateCorsConfiguration } = require('./config/cors');
 const employeeRosterSync = require('./jobs/employeeRosterSync');
+const studentRosterSync = require('./jobs/studentRosterSync');
+const classAssignmentSync = require('./jobs/classAssignmentSync');
 
 // Import routes
 const routes = require('./routes');
@@ -132,6 +134,17 @@ const initializeApp = async () => {
         // so someone deactivated there gets logged out here too (and a
         // rehired employee gets reactivated) instead of only syncing at login.
         employeeRosterSync.start();
+        // Same safety net for students - a withdrawn/graduated/transferred
+        // student otherwise keeps their 7-day session until it naturally
+        // expires or they log in again.
+        studentRosterSync.start();
+        // Keeps teachers' classes[] in sync with Central's real
+        // ClassTeacherAssignment data - previously only ever set by a
+        // manual, name-matched seed script (scripts/seedUserClassAssignments.js),
+        // so a newly (re-)provisioned account sat at classes: [] until
+        // someone remembered to re-run it, showing zero students on the
+        // daily check-in dashboard for a real teacher.
+        classAssignmentSync.start();
 
         // Test Google AI connection (with graceful fallback for overload and quota)
         try {

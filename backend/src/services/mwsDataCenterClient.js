@@ -86,10 +86,53 @@ async function listActiveEmployees() {
   return employees;
 }
 
+// Central paginates at 100/page max and defaults to status=ACTIVE
+// server-side if omitted - always pass one explicitly rather than relying
+// on that default, since a caller comparing across lifecycle states (e.g.
+// studentRosterSync.js's REGISTERED-and-ACTIVE-both-count-as-enrolled
+// check) needs to choose the status itself.
+async function listStudentsByStatus(status) {
+  const students = [];
+  let page = 1;
+  let totalPages = 1;
+
+  do {
+    const { data } = await client.get("/students", {
+      params: { page, size: LIST_PAGE_SIZE, status },
+    });
+    students.push(...data.data);
+    totalPages = data.paging.total_page;
+    page += 1;
+  } while (page <= totalPages);
+
+  return students;
+}
+
+// Same bulk-diff posture as listActiveEmployees() - walks every page,
+// throws on any page failure rather than returning a partial list.
+async function listClassTeacherAssignments() {
+  const assignments = [];
+  let page = 1;
+  let totalPages = 1;
+
+  do {
+    const { data } = await client.get("/class-teacher-assignments", {
+      params: { page, size: LIST_PAGE_SIZE },
+    });
+    assignments.push(...data.data);
+    totalPages = data.paging.total_page;
+    page += 1;
+  } while (page <= totalPages);
+
+  return assignments;
+}
+
 module.exports = {
   lookupEmployeeByEmail,
   lookupEmployeeByEmployeeId,
   listActiveEmployees,
   lookupStudentByEmail,
+  listStudentsByStatus,
   getStudentSupportContacts,
+  listClassTeacherAssignments,
 };

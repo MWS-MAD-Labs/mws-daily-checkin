@@ -215,15 +215,15 @@ export default defineConfig({
         }
     },
     server: {
-        port: 8090,
+        port: 5174,
         proxy: {
             '/api': {
-                target: 'http://localhost:3001',
+                target: 'http://localhost:3003',
                 changeOrigin: true,
                 secure: false
             },
             '/auth': {
-                target: 'http://localhost:3001',
+                target: 'http://localhost:3003',
                 changeOrigin: true,
                 secure: false,
                 // /auth/callback is a frontend SPA route (AuthCallback.jsx), not
@@ -235,13 +235,13 @@ export default defineConfig({
                 }
             },
             '/socket.io': {
-                target: 'http://localhost:3001',
+                target: 'http://localhost:3003',
                 changeOrigin: true,
                 secure: false,
                 ws: true
             },
             '/mtss': {
-                target: 'http://127.0.0.1:5174',
+                target: 'http://127.0.0.1:5176',
                 changeOrigin: true,
                 secure: false,
                 ws: true

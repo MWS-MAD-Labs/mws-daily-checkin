@@ -1,30 +1,26 @@
-const DEFAULT_DASHBOARD_ROLES = new Set(['directorate', 'superadmin', 'admin', 'head_unit']);
+const DEFAULT_DASHBOARD_ROLES = new Set(['directorate', 'superadmin', 'admin', 'head_unit', 'counselor']);
 const MTSS_NATIVE_ADMIN_ROLES = new Set(['directorate', 'superadmin', 'admin']);
 const MTSS_NATIVE_LEADER_ROLES = new Set(['head_unit', 'principal']);
 const MTSS_NATIVE_TEACHER_ROLES = new Set(['teacher', 'se_teacher', 'staff', 'support_staff', 'counselor']);
-const MTSS_DEFAULT_LEADER_EMAILS = new Set([
-    'aria@millennia21.id',
-    'faisal@millennia21.id',
-    'kholida@millennia21.id',
-    'latifah@millennia21.id'
-]);
-const MTSS_DEFAULT_OBSERVER_EMAILS = new Set([
-    'mahrukh@millennia21.id'
-]);
+// Used to be two hardcoded allowlists (4 emails for leader, 1 for observer).
+// Both removed - Central's job_level already produces the right Hub-relayed
+// tag on every login ("Head Unit" -> head-unit -> role 'head_unit' -> MTSS
+// leader; "Director" -> director -> role 'directorate' -> MTSS admin), so
+// deriveRoleFromCentralTags (jobLevelRoleMapping.js) already lands everyone
+// in MTSS_NATIVE_LEADER_ROLES/MTSS_NATIVE_ADMIN_ROLES below with no
+// allowlist needed. The observer allowlist used to specifically cap
+// mahrukh@millennia21.id (Academic Director) down to read-only despite her
+// Director-level native role - removed by explicit request, so she now gets
+// full MTSS admin access matching her actual Central position like every
+// other directorate-level user.
 
-// Centralized list of delegated dashboard access rules
-const DASHBOARD_DELEGATIONS = [
-    {
-        email: 'wina@millennia21.id',
-        delegatedRole: 'directorate',
-        delegatedFromEmail: 'mahrukh@millennia21.id',
-        delegatedFromName: 'Mahrukh Bashir',
-        description: 'Mirrors Ms. Mahrukh emotional wellness dashboard access',
-        reason: 'School psychologist needs identical Emotional Check-in Dashboard visibility',
-        scope: ['emotional_dashboard'],
-        label: 'Delegated Emotional Dashboard Access'
-    }
-];
+// Centralized list of delegated dashboard access rules - for genuinely
+// one-off individual exceptions only. The school psychologist case that
+// used to live here (wina@millennia21.id) is now derived automatically from
+// Central's job_position ("School's Psychologist" -> role 'counselor', see
+// jobLevelRoleMapping.js's JOB_POSITION_TO_ROLE + DEFAULT_DASHBOARD_ROLES
+// above), so whoever holds that position gets access without a code change.
+const DASHBOARD_DELEGATIONS = [];
 
 const normalizeEmail = (email) => (typeof email === 'string' ? email.trim().toLowerCase() : '');
 const normalizeRole = (role) => (typeof role === 'string' ? role.trim().toLowerCase() : '');
@@ -142,7 +138,6 @@ const buildMtssAccessProfile = (user) => {
     }
 
     const normalizedRole = normalizeRole(user.role);
-    const email = normalizeEmail(user.email);
     const overrideEnabled = user?.mtssAccess && typeof user.mtssAccess.enabled === 'boolean'
         ? user.mtssAccess.enabled
         : null;
@@ -170,14 +165,6 @@ const buildMtssAccessProfile = (user) => {
         };
     }
 
-    if (MTSS_DEFAULT_OBSERVER_EMAILS.has(email)) {
-        return {
-            ...getMtssAccessLevelConfig('observer', user),
-            source: 'default_observer_allowlist',
-            reason: 'Default MTSS observer allowlist'
-        };
-    }
-
     if (MTSS_NATIVE_ADMIN_ROLES.has(normalizedRole)) {
         return {
             ...getMtssAccessLevelConfig('admin', user),
@@ -202,14 +189,6 @@ const buildMtssAccessProfile = (user) => {
             effectiveRole: normalizedRole,
             source: 'native_role',
             reason: 'Native MTSS teacher role'
-        };
-    }
-
-    if (MTSS_DEFAULT_LEADER_EMAILS.has(email)) {
-        return {
-            ...getMtssAccessLevelConfig('leader', user),
-            source: 'default_leader_allowlist',
-            reason: 'Default MTSS leadership allowlist'
         };
     }
 
