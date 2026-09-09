@@ -4,10 +4,10 @@ services:
     container_name: mws-backend
     restart: unless-stopped
     expose:
-      - "3003"
+      - "3001"
     environment:
       NODE_ENV: production
-      PORT: 3003
+      PORT: 3001
       # TODO (part of the /daily-checkin/* migration): once the external
       # gateway routes /daily-checkin/* to this app's container, change this
       # to https://app.millenniaws.sch.id/daily-checkin - not changed yet
@@ -46,7 +46,7 @@ services:
       CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
       CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3003/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

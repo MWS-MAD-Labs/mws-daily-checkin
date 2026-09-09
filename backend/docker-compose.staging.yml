@@ -6,10 +6,10 @@ services:
     env_file:
       - .env
     expose:
-      - "3003"
+      - "3001"
     environment:
       NODE_ENV: production
-      PORT: 3003
+      PORT: 3001
       # NOTE: staging runs on a different domain (mws.web.id) than
       # production (millenniaws.sch.id) - unclear whether staging shares
       # production's "one app, /daily-checkin + /mtss path prefix" gateway
@@ -19,7 +19,7 @@ services:
       CORS_ORIGINS: https://app-stg.mws.web.id
       OPENROUTER_APP_NAME: IntegraLearn AI Chat Staging
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3003/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/health >/dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 5
