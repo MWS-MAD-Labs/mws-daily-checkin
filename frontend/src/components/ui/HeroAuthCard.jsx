@@ -23,7 +23,9 @@ const HeroAuthCard = memo(({
         <p className="text-xs text-foreground/55">Access your personalized learning dashboard</p>
       </div>
 
-      {/* Google OAuth */}
+      {/* Labeled "Google" since Hub authenticates with Google itself, but
+          this button just launches Hub's SSO flow (see onGoogleSignIn in
+          HeroSection.jsx) - not a direct Google OAuth flow of this app's own. */}
       <button
         onClick={onGoogleSignIn}
         className="w-full group/btn relative overflow-hidden rounded-xl bg-card border border-border/50 hover:border-primary/40 shadow-sm hover:shadow-lg hover:scale-[1.015] hover:-translate-y-px active:scale-[0.985] transition-all duration-300"
@@ -88,7 +90,7 @@ const HeroAuthCard = memo(({
       </form>
 
       <p className="text-[9px] md:text-[10px] text-center text-foreground/40 leading-relaxed">
-        Secure authentication powered by Google OAuth & JWT.
+        Secure authentication powered by Hub SSO & JWT.
         <br />By continuing, you agree to our Terms & Privacy Policy.
       </p>
     </div>

@@ -11,6 +11,7 @@ const userRoutes = require('./users');
 const notificationRoutes = require('./notifications');
 const devTopologyRoutes = require('./devTopology');
 const configRoutes = require('./config');
+const aiChatProxyRoutes = require('./aiChatProxy');
 
 // Slack interactivity handler with proper signature verification
 router.post('/slack/interactions', express.raw({ type: 'application/x-www-form-urlencoded', limit: '10mb' }), async (req, res) => {
@@ -167,6 +168,7 @@ router.use('/v1/users', userRoutes);
 router.use('/v1/notifications', notificationRoutes);
 router.use('/v1/dev/topology', devTopologyRoutes);
 router.use('/v1/config', configRoutes);
+router.use('/v1/ai-chat', aiChatProxyRoutes);
 
 // OAuth routes are now mounted directly in app.js
 // router.use('/auth', authRoutes);

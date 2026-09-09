@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const helmet = require('helmet');
-const passport = require('../config/googleOAuth');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const UserStudent = require('../models/UserStudent');
@@ -12,30 +11,11 @@ const { syncEmployeeFromCentral } = require('../utils/employeeCentralSync');
 const { verifyHubRelayToken } = require('../utils/hubSsoRelay');
 const { resolveOrProvisionSsoUser } = require('../utils/ssoUserResolution');
 const { createUserAwareRateLimiter } = require('../middleware/rateLimiter');
-
-// Session middleware is only needed for Google OAuth flow.
-// Email/password login and JWT-based routes do not require sessions.
-const buildOAuthMiddleware = () => {
-    const secret = process.env.SESSION_SECRET || process.env.JWT_SECRET;
-    if (!secret) return [];
-    return [
-        require('express-session')({ secret, resave: false, saveUninitialized: false }),
-        passport.initialize(),
-        passport.session()
-    ];
-};
-const oauthMiddleware = buildOAuthMiddleware();
+const { setAuthCookie, clearAuthCookie } = require('../utils/authCookie');
 
 // Tighter than the general apiLimiter (which skips /v1/auth entirely) -
 // this is a sensitive auth entry point, not a regular auth check.
 const ssoLimiter = createUserAwareRateLimiter({ windowMinutes: 1, max: 20, skip: () => false });
-
-function resolveOAuthFailureRedirect(info) {
-    if (info?.message === 'central_inactive') {
-        return '/account-not-found';
-    }
-    return `/?error=${encodeURIComponent(info?.message || 'oauth_failed')}`;
-}
 
 const isCentralLookupError = (error) => {
     const baseUrl = error?.config?.baseURL;
@@ -45,124 +25,6 @@ const isCentralLookupError = (error) => {
         (typeof path === 'string' && /^\/(employees|students)\//.test(path))
     );
 };
-
-const ensureGoogleOAuthConfigured = (req, res, next) => {
-    if (passport.googleOAuthConfigured) {
-        return next();
-    }
-
-    const missingVariables = passport.googleOAuthStatus?.missingVariables || [];
-    const callbackURL = passport.googleOAuthStatus?.callbackURL || null;
-
-    return sendError(
-        res,
-        `Google OAuth is not configured${missingVariables.length ? `: missing ${missingVariables.join(', ')}` : ''}`,
-        503,
-        {
-            missingVariables,
-            callbackURL
-        }
-    );
-};
-
-router.get('/google',
-    ...oauthMiddleware,
-    ensureGoogleOAuthConfigured,
-    passport.authenticate('google', {
-        scope: ['profile', 'email'],
-        hd: 'millennia21.id'
-    })
-);
-
-router.get('/google/callback',
-    ...oauthMiddleware,
-    ensureGoogleOAuthConfigured,
-    (req, res, next) => {
-        passport.authenticate('google', (err, user, info) => {
-            if (err) {
-                console.error('❌ Google OAuth error:', err);
-                return res.redirect('/?error=oauth_failed');
-            }
-            if (!user) {
-                return res.redirect(resolveOAuthFailureRedirect(info));
-            }
-            req.logIn(user, (loginErr) => {
-                if (loginErr) {
-                    console.error('❌ Google OAuth session login error:', loginErr);
-                    return res.redirect('/?error=oauth_failed');
-                }
-                next();
-            });
-        })(req, res, next);
-    },
-    async (req, res) => {
-        try {
-            console.log('✅ Google OAuth successful for user:', req.user.email);
-
-            const userModel = req.user?.constructor?.modelName === 'UserStudent' ? UserStudent : User;
-            const dbUser = await userModel.findById(req.user._id).select('-password -googleProfile');
-
-            if (!dbUser) {
-                console.error('❌ User not found in database after OAuth:', req.user.email);
-                return res.redirect('/?error=user_not_found');
-            }
-
-            if (!dbUser.isActive) {
-                console.error('❌ Inactive user attempted OAuth login:', req.user.email);
-                return res.redirect('/?error=account_inactive');
-            }
-
-            dbUser.lastLogin = new Date();
-            await dbUser.save();
-
-            const token = jwt.sign(
-                {
-                    userId: dbUser._id,
-                    email: dbUser.email,
-                    role: dbUser.role
-                },
-                process.env.JWT_SECRET,
-                { expiresIn: '7d' }
-            );
-
-            const userDataForFrontend = {
-                ...buildRequestUser(dbUser),
-                lastLogin: dbUser.lastLogin,
-                isActive: dbUser.isActive,
-                emailVerified: dbUser.emailVerified,
-                validatedAt: new Date().toISOString(),
-                authMethod: 'google_oauth'
-            };
-
-            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
-            const redirectTarget = dbUser.role === 'student'
-                ? '/emotional-checkin'
-                : (userDataForFrontend.mtssAccess?.hasAccess ? '/support-hub' : '/select-role');
-            const redirectUrl = `${frontendUrl}/auth/callback#token=${encodeURIComponent(token)}&user=${encodeURIComponent(JSON.stringify(userDataForFrontend))}&redirect=${encodeURIComponent(redirectTarget)}`;
-
-            console.log('🌐 OAuth redirect config:', {
-                FRONTEND_URL_ENV: process.env.FRONTEND_URL || 'NOT SET (using fallback)',
-                NODE_ENV: process.env.NODE_ENV || 'NOT SET',
-                frontendUrl,
-                redirectTarget
-            });
-
-            console.log('📋 User role for dashboard access:', {
-                role: dbUser.role,
-                dashboardRole: userDataForFrontend.dashboardRole,
-                delegatedFrom: userDataForFrontend.dashboardAccess?.delegatedFromEmail || null,
-                hasDashboardAccess: hasDashboardAccess(userDataForFrontend),
-                hasMtssAccess: hasMtssAccess(userDataForFrontend),
-                mtssRole: userDataForFrontend.mtssRole || null
-            });
-
-            res.redirect(redirectUrl);
-        } catch (error) {
-            console.error('❌ OAuth callback error:', error);
-            res.redirect('/?error=oauth_failed');
-        }
-    }
-);
 
 // Hub token-relay SSO handoff. Hub already authenticated the user (its own
 // Google login) and mints a short-lived, single-use, audience-scoped token
@@ -178,7 +40,7 @@ router.get('/google/callback',
 // relaxation to just this transient redirect hop rather than touching the
 // app-wide default.
 router.get('/sso', helmet.crossOriginOpenerPolicy({ policy: 'unsafe-none' }), ssoLimiter, async (req, res) => {
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174/daily-checkin';
     const { token } = req.query;
 
     if (!token || typeof token !== 'string') {
@@ -206,11 +68,12 @@ router.get('/sso', helmet.crossOriginOpenerPolicy({ policy: 'unsafe-none' }), ss
             return res.redirect(`${frontendUrl}/?error=account_inactive`);
         }
 
-        const token7d = jwt.sign(
+        const sessionToken = jwt.sign(
             { userId: dbUser._id, email: dbUser.email, role: dbUser.role },
             process.env.JWT_SECRET,
-            { expiresIn: '7d' }
+            { expiresIn: process.env.JWT_EXPIRES_IN || '1d' }
         );
+        setAuthCookie(res, sessionToken);
 
         const userDataForFrontend = {
             ...buildRequestUser(dbUser),
@@ -221,9 +84,12 @@ router.get('/sso', helmet.crossOriginOpenerPolicy({ policy: 'unsafe-none' }), ss
             authMethod: 'hub_sso'
         };
 
-        const redirectTarget = '/select-role';
+        // Basename-relative - the frontend's own React Router basename
+        // (main.jsx) turns this into /daily-checkin/home for the browser.
+        const redirectTarget = '/home';
 
-        const redirectUrl = `${frontendUrl}/auth/callback#token=${encodeURIComponent(token7d)}&user=${encodeURIComponent(JSON.stringify(userDataForFrontend))}&redirect=${encodeURIComponent(redirectTarget)}`;
+        // No token in this URL - it's already set as an httpOnly cookie above.
+        const redirectUrl = `${frontendUrl}/auth/callback#user=${encodeURIComponent(JSON.stringify(userDataForFrontend))}&redirect=${encodeURIComponent(redirectTarget)}`;
 
         console.log('✅ Hub SSO login successful:', {
             email: dbUser.email,
@@ -298,16 +164,13 @@ router.post('/login', require('../middleware/validation').validate(require('../u
                 role: user.role
             },
             process.env.JWT_SECRET,
-            { expiresIn: '7d' }
+            { expiresIn: process.env.JWT_EXPIRES_IN || '1d' }
         );
+        setAuthCookie(res, token);
 
-        // Return user data and token
-        const userData = {
-            user: buildRequestUser(user),
-            token
-        };
-
-        sendSuccess(res, 'Login successful', userData);
+        // Token lives in the httpOnly cookie now, not the response body -
+        // the frontend never needs to see or store it directly.
+        sendSuccess(res, 'Login successful', { user: buildRequestUser(user) });
 
     } catch (error) {
         console.error('Login error:', error);
@@ -315,8 +178,11 @@ router.post('/login', require('../middleware/validation').validate(require('../u
     }
 });
 
-// Logout — JWT auth is stateless; client drops the token.
+// Logout — clears the httpOnly session cookie server-side (the client can't
+// do this itself the way it could with localStorage.removeItem).
 router.post('/logout', (req, res) => {
+    clearAuthCookie(res);
+
     // Signing out here should also end the Hub session, otherwise the user
     // lands back on the hub still logged in and one click re-enters this app.
     //
@@ -324,10 +190,15 @@ router.post('/logout', (req, res) => {
     // clear it - no server-to-server call can. We hand the client a URL to
     // navigate to instead of trying to do it from here.
     const hubBaseUrl = process.env.HUB_BASE_URL;
+    // Same FRONTEND_URL fallback as the /sso relay above - keep both in sync
+    // so a missing env var doesn't send local dev logout to production.
+    // Trailing slash is mandatory here: unlike /sso (which always appends a
+    // path after frontendUrl), this IS the final landing URL, and Vite's dev
+    // server 404s a request for exactly its base path without the slash
+    // (e.g. /daily-checkin vs /daily-checkin/).
+    const hubBaseTarget = `${(process.env.FRONTEND_URL || 'http://localhost:5174/daily-checkin').replace(/\/$/, '')}/`;
     const hubLogoutUrl = hubBaseUrl
-        ? `${hubBaseUrl.replace(/\/$/, '')}/auth/logout?redirect=${encodeURIComponent(
-              process.env.FRONTEND_URL || 'https://app.millenniaws.sch.id'
-          )}`
+        ? `${hubBaseUrl.replace(/\/$/, '')}/auth/logout?redirect=${encodeURIComponent(hubBaseTarget)}`
         : null;
 
     sendSuccess(res, 'Logged out successfully', hubLogoutUrl ? { hubLogoutUrl } : null);
@@ -343,6 +214,10 @@ router.get('/logout-silent', (req, res) => {
     const hubOrigin = (process.env.HUB_BASE_URL || '').replace(/\/$/, '');
     res.removeHeader('X-Frame-Options');
     res.setHeader('Content-Security-Policy', `frame-ancestors 'self'${hubOrigin ? ` ${hubOrigin}` : ''}`);
+    // This request is same-origin to daily-checkin (just framed by Hub's
+    // different origin), so clearing our own cookie here still works even
+    // though Hub can't touch it directly.
+    clearAuthCookie(res);
     res.type('html').send(
         `<!doctype html><html><body><script>try{localStorage.removeItem('daily.auth_token');localStorage.removeItem('daily.auth_user');sessionStorage.removeItem('daily.auth_token');sessionStorage.removeItem('daily.auth_user');}catch(e){}</script></body></html>`
     );

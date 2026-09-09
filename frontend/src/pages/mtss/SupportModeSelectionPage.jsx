@@ -243,11 +243,11 @@ const SupportModeSelectionPage = memo(() => {
 
   const handleMtssClick = useCallback(() => {
     if (!getMtssAccessProfile(user).hasAccess) {
-      navigate('/select-role');
+      navigate('/home');
       return;
     }
 
-    const nextRoute = getDefaultMtssRoute(user) || '/select-role';
+    const nextRoute = getDefaultMtssRoute(user) || '/home';
     openProductRoute(nextRoute);
   }, [navigate, user]);
 
@@ -308,7 +308,7 @@ const SupportModeSelectionPage = memo(() => {
               key={card.id}
               card={card}
               index={i}
-              onClick={card.id === 'mtss' ? handleMtssClick : () => navigate('/select-role')}
+              onClick={card.id === 'mtss' ? handleMtssClick : () => navigate('/home')}
             />
           ))}
         </div>

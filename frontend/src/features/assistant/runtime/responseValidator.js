@@ -35,7 +35,6 @@ const ALLOWED_ROUTES = new Set([
     '/student/emotional-checkin/ai',
     '/student/emotional-checkin/face-scan',
     '/student/ai-chat',
-    '/support-hub',
     '/emotional-checkin',
     '/emotional-checkin/staff',
     '/emotional-checkin/dashboard',
@@ -48,7 +47,7 @@ const ALLOWED_ROUTES = new Set([
     '/mtss/student-portal',
     '/mtss/teacher',
     '/mtss/admin',
-    '/select-role',
+    '/home',
     '/user-management',
     '/ai-assistant'
 ]);

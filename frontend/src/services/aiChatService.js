@@ -1,8 +1,11 @@
 import api from './authService';
 
 const withData = (response) => response?.data?.data || {};
-const MTSS_API_BASE_URL = String(import.meta.env.VITE_MTSS_API_BASE || '/mtss/api/v1').replace(/\/+$/, '');
-const CHAT_REQUEST_CONFIG = { baseURL: MTSS_API_BASE_URL, skipGlobalLoading: true };
+// Served by MTSS's backend, but proxied through this app's own backend
+// (routes/aiChatProxy.js) so the browser never holds a credential it could
+// use to call MTSS directly - same baseURL as every other daily-checkin
+// request, no separate MTSS origin/token involved from here.
+const CHAT_REQUEST_CONFIG = { skipGlobalLoading: true };
 
 /**
  * Send a message to AI and get response

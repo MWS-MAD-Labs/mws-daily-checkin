@@ -1,6 +1,6 @@
 // RouteConfig.jsx — mws-daily-checkin
 import { Suspense, lazy, memo } from "react";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import PageLoader from "@/components/PageLoader";
 import PageTransition from "./PageTransition";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -25,7 +25,6 @@ const PersonalStatsPage = lazy(() => import(/* webpackPrefetch: true */ '@/pages
 const EmotionalHistoryPage = lazy(() => import(/* webpackPrefetch: true */ '@/pages/EmotionalHistoryPage'));
 const EmotionalPatternsPage = lazy(() => import(/* webpackPrefetch: true */ '@/pages/EmotionalPatternsPage'));
 const UserManagementDashboard = lazy(() => import(/* webpackPrefetch: true */ '@/pages/UserManagementDashboard'));
-const SupportHubPage = lazy(() => import(/* webpackPrefetch: true */ '@/pages/hub/SupportHubPage'));
 const StudentEmotionalCheckinPage = lazy(() => import(/* webpackPrefetch: true */ '@/pages/StudentEmotionalCheckinPage'));
 const StudentFaceScanPage = lazy(() => import('@/pages/StudentFaceScanPage'));
 const StudentManualCheckinPage = lazy(() => import(/* webpackPrefetch: true */ '@/pages/StudentManualCheckinPage'));
@@ -71,7 +70,15 @@ const publicRoutes = [
     <Route key="auth-callback" path="/auth/callback" element={<MemoizedPageTransition><AuthCallback /></MemoizedPageTransition>} />,
     <Route key="account-not-found" path="/account-not-found" element={<MemoizedPageTransition><AccountNotFoundPage /></MemoizedPageTransition>} />,
     <Route key="face-scan" path="/emotional-checkin/face-scan" element={<MemoizedPageTransition><EmotionalCheckinFaceScanPage /></MemoizedPageTransition>} />,
-    <Route key="select-role" path="/select-role" element={<ProtectedRoute allowedRoles={['staff', 'support_staff', 'nurse', 'counselor', 'teacher', 'se_teacher', 'head_unit', 'principal', 'directorate', 'admin', 'superadmin']}><MemoizedPageTransition><RoleSelectionPage /></MemoizedPageTransition></ProtectedRoute>} />,
+    // This is now nested inside the app-level /daily-checkin basename
+    // (main.jsx), so its own path can't also be "/daily-checkin" - that
+    // would collide with the landing page's own path="/" once combined
+    // (both would resolve to the app's bare root). Also can't be bare "/"
+    // itself, since that's the public LandingPage route above. "/home" is
+    // the actual final URL /daily-checkin/home.
+    <Route key="daily-checkin-home" path="/home" element={<ProtectedRoute allowedRoles={['staff', 'support_staff', 'nurse', 'counselor', 'teacher', 'se_teacher', 'head_unit', 'principal', 'directorate', 'admin', 'superadmin']}><MemoizedPageTransition><RoleSelectionPage /></MemoizedPageTransition></ProtectedRoute>} />,
+    // Old URLs kept working as redirects, not 404s, for anyone with a bookmark/link from before the rename.
+    <Route key="select-role-redirect" path="/select-role" element={<Navigate to="/home" replace />} />,
     <Route key="profile" path="/profile" element={<ProtectedRoute><MemoizedPageTransition><ProfilePage /></MemoizedPageTransition></ProtectedRoute>} />,
     <Route key="notifications" path="/notifications" element={<ProtectedRoute><MemoizedPageTransition><NotificationPage /></MemoizedPageTransition></ProtectedRoute>} />,
     <Route key="notifications-settings" path="/notifications/settings" element={<ProtectedRoute><MemoizedPageTransition><NotificationSettingsPage /></MemoizedPageTransition></ProtectedRoute>} />,
@@ -101,7 +108,10 @@ const publicRoutes = [
     <Route key="emotional-patterns" path="/profile/emotional-patterns" element={<ProtectedRoute><MemoizedPageTransition><EmotionalPatternsPage /></MemoizedPageTransition></ProtectedRoute>} />,
     <Route key="emotional-patterns-user" path="/profile/emotional-patterns/:userId" element={<ProtectedRoute><MemoizedPageTransition><EmotionalPatternsPage /></MemoizedPageTransition></ProtectedRoute>} />,
     <Route key="user-management" path="/user-management" element={<AdminProtectedRoute><UserManagementDashboard /></AdminProtectedRoute>} />,
-    <Route key="support-hub" path="/support-hub" element={<ProtectedRoute allowedRoles={['staff', 'support_staff', 'nurse', 'counselor', 'teacher', 'se_teacher', 'head_unit', 'principal', 'directorate', 'admin', 'superadmin']}><MemoizedPageTransition><SupportHubPage /></MemoizedPageTransition></ProtectedRoute>} />,
+    // /support-hub used to render its own mocked clone of Hub's app-launcher
+    // UI - removed as a duplicate of the real Hub (a separate domain/app).
+    // Kept as a redirect, not a 404, for anyone with an old bookmark/link.
+    <Route key="support-hub" path="/support-hub" element={<Navigate to="/home" replace />} />,
     <Route key="student-emotional-checkin" path="/student/emotional-checkin" element={<ProtectedRoute allowedRoles={['student']}><MemoizedPageTransition><StudentEmotionalCheckinPage /></MemoizedPageTransition></ProtectedRoute>} />,
     <Route key="student-face-scan" path="/student/emotional-checkin/face-scan" element={<ProtectedRoute allowedRoles={['student']}><MemoizedPageTransition><StudentFaceScanPage /></MemoizedPageTransition></ProtectedRoute>} />,
     <Route key="student-manual-checkin" path="/student/emotional-checkin/manual" element={<ProtectedRoute allowedRoles={['student']}><MemoizedPageTransition><StudentManualCheckinPage /></MemoizedPageTransition></ProtectedRoute>} />,

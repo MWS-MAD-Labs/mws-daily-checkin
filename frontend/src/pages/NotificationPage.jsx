@@ -184,7 +184,7 @@ const getGroupLabel = (record, mode = "student") => {
 };
 
 const resolveDefaultRoute = (role = "") =>
-    toLowerText(role) === "student" ? "/student/support-hub" : "/support-hub";
+    toLowerText(role) === "student" ? "/student/support-hub" : "/home";
 
 const resolveActionRoute = (record, role = "") => {
     const metadata = record.metadata || {};

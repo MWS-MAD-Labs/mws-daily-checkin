@@ -2,22 +2,9 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { hasEmotionalDashboardAccess } from '@/utils/accessControl';
 import { storePendingRedirect } from '@/utils/authRedirect';
-import { hasMtssAccess } from '@/utils/mtssAccess';
+import PageLoader from '@/components/PageLoader';
 
 const normalizeRole = (role = '') => String(role || '').trim().toLowerCase();
-const SUPPORT_HUB_ROLES = new Set([
-    'staff',
-    'support_staff',
-    'nurse',
-    'counselor',
-    'teacher',
-    'se_teacher',
-    'head_unit',
-    'principal',
-    'directorate',
-    'admin',
-    'superadmin',
-]);
 
 const ProtectedRoute = ({
     children,
@@ -30,20 +17,17 @@ const ProtectedRoute = ({
     const location = useLocation();
     const userRole = normalizeRole(user?.role);
 
-    // Role-aware fallback: students -> student hub, support/MTSS roles -> support hub, others -> check-in selection
-    const fallbackPath = userRole === 'student'
-        ? '/student/support-hub'
-        : SUPPORT_HUB_ROLES.has(userRole) || hasMtssAccess(user || { role: userRole })
-            ? '/support-hub'
-            : '/select-role';
+    // Role-aware fallback: students -> student hub, everyone else -> home
+    // (/home, which has its own link out to the real Hub)
+    const fallbackPath = userRole === 'student' ? '/student/support-hub' : '/home';
 
-    // Show loading while checking authentication
+    // Show loading while checking authentication - same branded PageLoader
+    // the route-level Suspense fallback uses, so the sequence of loading
+    // moments right after an SSO login (chunk download -> auth check) reads
+    // as one continuous loading screen instead of switching between two
+    // different-looking spinners.
     if (loading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-                <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-purple-500"></div>
-            </div>
-        );
+        return <PageLoader />;
     }
 
     // If not authenticated, redirect to login

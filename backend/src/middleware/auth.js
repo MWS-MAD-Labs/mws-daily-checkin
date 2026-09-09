@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const UserStudent = require('../models/UserStudent');
 const { sendError } = require('../utils/response');
+const { COOKIE_NAME } = require('../utils/authCookie');
 const {
     buildDashboardAccessProfile,
     buildMtssAccessProfile,
@@ -56,13 +57,22 @@ const resolveUserByRoleAndId = async (role, userId) => {
 // JWT Authentication Middleware
 const authenticate = async (req, res, next) => {
     try {
+        // Cookie first - the browser's own session, now that the token
+        // lives in an httpOnly cookie instead of localStorage (see
+        // utils/authCookie.js). The Authorization header stays supported
+        // for non-browser callers, like the AI-chat proxy's own outbound
+        // service token.
         const authHeader = req.headers.authorization;
+        const cookieToken = req.cookies?.[COOKIE_NAME];
 
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        let token;
+        if (cookieToken) {
+            token = cookieToken;
+        } else if (authHeader && authHeader.startsWith('Bearer ')) {
+            token = authHeader.substring(7);
+        } else {
             return sendError(res, 'Access token required', 401);
         }
-
-        const token = authHeader.substring(7); // Remove 'Bearer ' prefix
 
         // Verify token
         const decoded = jwt.verify(token, process.env.JWT_SECRET);

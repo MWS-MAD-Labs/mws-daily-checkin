@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { startGlobalLoading, stopGlobalLoading } from '@/lib/loadingManager';
-import { clearStoredAuthSession, getStoredAuthToken } from '@/utils/authStorage';
+import { clearStoredAuthSession } from '@/utils/authStorage';
 
 // Default to versioned API to match backend routing
 const API_BASE_URL = import.meta.env.VITE_API_BASE || '/api/v1';
@@ -9,20 +9,22 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE || '/api/v1';
 const api = axios.create({
     baseURL: API_BASE_URL,
     timeout: 45000,
+    // The session lives in an httpOnly cookie now (see backend
+    // utils/authCookie.js) instead of a token this app attaches itself -
+    // withCredentials is what makes the browser actually send it.
+    withCredentials: true,
     headers: {
         'Content-Type': 'application/json',
     },
 });
 
-// Request interceptor to add auth token
+// Request interceptor - loading indicator only now. Auth is carried by the
+// httpOnly cookie automatically; there's no token for this app's own JS to
+// attach anymore.
 api.interceptors.request.use(
     (config) => {
         if (!config?.skipGlobalLoading) {
             startGlobalLoading();
-        }
-        const token = getStoredAuthToken();
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
         }
         return config;
     },
@@ -68,8 +70,13 @@ api.interceptors.response.use(
                 const shouldResetAuth = !msg || authFailureHints.some((hint) => msg.includes(hint));
                 if (shouldResetAuth) {
                     clearStoredAuthSession();
-                    if (typeof window !== 'undefined' && window.location.pathname !== '/') {
-                        window.location.assign('/');
+                    // import.meta.env.BASE_URL is '/daily-checkin/' in
+                    // production (vite.config.js), '/' in standalone local
+                    // dev - this bypasses React Router, so it needs the
+                    // prefix added explicitly rather than getting it from a
+                    // basename.
+                    if (typeof window !== 'undefined' && window.location.pathname !== import.meta.env.BASE_URL) {
+                        window.location.assign(import.meta.env.BASE_URL);
                     }
                 }
             }
@@ -96,9 +103,12 @@ export const logout = async () => {
     const hubLogoutUrl = response?.data?.data?.hubLogoutUrl;
     if (hubLogoutUrl) {
         window.location.assign(hubLogoutUrl);
+        // Signal callers to NOT also navigate locally - that would race
+        // against this cross-origin navigation and can flash/override it.
+        return { redirectedToHub: true };
     }
 
-    return response;
+    return { redirectedToHub: false };
 };
 
 export const getCurrentUser = async () => {

@@ -266,7 +266,7 @@ const pickAdaptiveNudge = ({
         };
     }
 
-    if (!isStudentRole(role) && pathname.startsWith("/support-hub")) {
+    if (!isStudentRole(role) && pathname.startsWith("/home")) {
         return {
             title: `${assistantName} quick nudge`,
             text: primaryFocus
@@ -353,9 +353,9 @@ const getQuickActions = (role = "student") => {
 
     return [
         {
-            label: "Support Hub",
-            description: "Open your staff/teacher support workspace",
-            navigateTo: "/support-hub"
+            label: "Home",
+            description: "Open your staff/teacher home",
+            navigateTo: "/home"
         },
         {
             label: "Open AI Assistant",

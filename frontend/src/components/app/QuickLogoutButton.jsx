@@ -196,11 +196,15 @@ const QuickMenu = memo(() => {
         setLoading(true);
         dispatch(logoutUser())
             .unwrap()
-            .catch(() => { })
+            .then((result) => {
+                // If a Hub redirect is already navigating the tab away,
+                // don't also push a local route - that races the Hub nav.
+                if (!result?.redirectedToHub) navigate("/");
+            })
+            .catch(() => navigate("/"))
             .finally(() => {
                 setLoading(false);
                 setConfirming(false);
-                navigate("/");
             });
     }, [confirming, dispatch, navigate]);
 

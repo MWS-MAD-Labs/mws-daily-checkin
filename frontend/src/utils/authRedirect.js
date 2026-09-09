@@ -1,19 +1,4 @@
-import { hasMtssAccess } from "@/utils/mtssAccess";
-
 const PENDING_AUTH_REDIRECT_KEY = "pending_auth_redirect";
-const SUPPORT_HUB_ROLES = new Set([
-    "staff",
-    "support_staff",
-    "nurse",
-    "counselor",
-    "teacher",
-    "se_teacher",
-    "head_unit",
-    "principal",
-    "directorate",
-    "admin",
-    "superadmin",
-]);
 
 export const sanitizeRedirectPath = (value) => {
     if (typeof value !== "string") return null;
@@ -60,10 +45,8 @@ export const getDefaultPostLoginPath = (userOrRole) => {
         return "/student/support-hub";
     }
 
-    if (SUPPORT_HUB_ROLES.has(normalizedRole) || hasMtssAccess(user || { role: normalizedRole })) {
-        return "/support-hub";
-    }
-
-    // Unknown/non-support roles go directly to check-in method selection.
-    return "/select-role";
+    // Every staff/teacher role lands on /home - the real home page (final
+    // URL /daily-checkin/home via the app's own basename, main.jsx), which
+    // has its own link out to the real Hub for launching other apps.
+    return "/home";
 };

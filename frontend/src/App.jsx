@@ -1,5 +1,5 @@
 import { Suspense, lazy, memo, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import AppHelmet from '@/components/app/AppHelmet';
 import RouteConfig from '@/components/app/RouteConfig';
@@ -13,11 +13,9 @@ const GlobalLoadingOverlay = lazy(() => import('@/components/app/GlobalLoadingOv
 const QuickLogoutButton = lazy(() => import('@/components/app/QuickLogoutButton'));
 
 const routeMatches = (pathname, prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`);
-const HUB_SSO_SELECT_ROLE_REDIRECT_KEY = 'hub_sso_select_role_redirect';
 
 const App = memo(() => {
     const location = useLocation();
-    const navigate = useNavigate();
     const aosRef = useRef(null);
     const [showEnhancements, setShowEnhancements] = useState(false);
 
@@ -45,15 +43,19 @@ const App = memo(() => {
                 .catch(() => {});
         };
 
+        // Timeout is a worst-case ceiling, not the normal wait - kept short
+        // so this doesn't compound with an already-slow load (e.g. right
+        // after an SSO redirect chain) into a second, late-arriving wave of
+        // visual changes on top of the first paint.
         if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-            const idleId = window.requestIdleCallback(initAOS, { timeout: 2000 });
+            const idleId = window.requestIdleCallback(initAOS, { timeout: 800 });
             return () => {
                 isDisposed = true;
                 window.cancelIdleCallback?.(idleId);
             };
         }
 
-        const timeoutId = window.setTimeout(initAOS, 600);
+        const timeoutId = window.setTimeout(initAOS, 400);
         return () => {
             isDisposed = true;
             window.clearTimeout(timeoutId);
@@ -65,29 +67,24 @@ const App = memo(() => {
     }, [location.pathname]);
 
     useEffect(() => {
-        if (location.pathname !== '/support-hub') return;
-        if (window.sessionStorage.getItem(HUB_SSO_SELECT_ROLE_REDIRECT_KEY) !== '1') return;
-
-        window.sessionStorage.removeItem(HUB_SSO_SELECT_ROLE_REDIRECT_KEY);
-        navigate('/select-role', { replace: true });
-    }, [location.pathname, navigate]);
-
-    useEffect(() => {
         let disposed = false;
 
         const enableEnhancements = () => {
             if (!disposed) setShowEnhancements(true);
         };
 
+        // Same reasoning as the AOS timeout above - a short ceiling keeps
+        // background/decor layers arriving close enough to first paint that
+        // they read as part of the same load, not a late second wave.
         if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-            const idleId = window.requestIdleCallback(enableEnhancements, { timeout: 1500 });
+            const idleId = window.requestIdleCallback(enableEnhancements, { timeout: 600 });
             return () => {
                 disposed = true;
                 window.cancelIdleCallback?.(idleId);
             };
         }
 
-        const timeoutId = window.setTimeout(enableEnhancements, 280);
+        const timeoutId = window.setTimeout(enableEnhancements, 150);
         return () => {
             disposed = true;
             window.clearTimeout(timeoutId);

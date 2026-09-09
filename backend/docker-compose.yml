@@ -8,15 +8,17 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3003
+      # TODO (part of the /daily-checkin/* migration): once the external
+      # gateway routes /daily-checkin/* to this app's container, change this
+      # to https://app.millenniaws.sch.id/daily-checkin - not changed yet
+      # since the gateway rule has to land first, or logins would break.
       FRONTEND_URL: https://app.millenniaws.sch.id
       CORS_ORIGINS: https://app.millenniaws.sch.id,http://localhost:5173
       MONGODB_URI: ${MONGODB_URI}
       JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRES_IN: 7d
-      SESSION_SECRET: ${JWT_SECRET}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      GOOGLE_REDIRECT_URL: https://app.millenniaws.sch.id/auth/google/callback
+      JWT_EXPIRES_IN: 1d
+      AI_CHAT_PROXY_SECRET: ${AI_CHAT_PROXY_SECRET}
+      MTSS_API_BASE_URL: https://app.millenniaws.sch.id/mtss/api/v1
       GOOGLE_AI_API_KEY: ${GOOGLE_AI_API_KEY}
       GOOGLE_AI_MODEL: gemini-flash-latest
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}

@@ -3,7 +3,15 @@ import react from '@vitejs/plugin-react'
 import path from 'path'
 import { VitePWA } from 'vite-plugin-pwa'
 
+// daily-checkin is served under the /daily-checkin/ path by the "one app"
+// gateway, the same way MTSS is served under /mtss/ (see that repo's own
+// vite.config.js, which this mirrors). Every asset, SPA route, and PWA
+// scope must be prefixed with this base. Override with VITE_BASE_PATH
+// (e.g. '/' for standalone dev).
+const BASE_PATH = process.env.VITE_BASE_PATH || '/daily-checkin/'
+
 export default defineConfig({
+    base: BASE_PATH,
     plugins: [
         react(),
         VitePWA({
@@ -20,8 +28,8 @@ export default defineConfig({
                 background_color: '#ffffff',
                 display: 'standalone',
                 orientation: 'portrait-primary',
-                scope: '/',
-                start_url: '/',
+                scope: BASE_PATH,
+                start_url: BASE_PATH,
                 icons: [
                     {
                         src: 'Millennia.webp',
@@ -95,7 +103,7 @@ export default defineConfig({
                         }
                     },
                     {
-                        urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
+                        urlPattern: ({ url }) => url.pathname.startsWith('/daily-checkin/api/'),
                         handler: 'NetworkFirst',
                         options: {
                             cacheName: 'api-cache',
@@ -107,8 +115,8 @@ export default defineConfig({
                         }
                     }
                 ],
-                navigateFallback: '/index.html',
-                navigateFallbackDenylist: [/^\/api\//, /^\/auth\//, /^\/socket\.io\//, /^\/mtss(?:\/|$)/],
+                navigateFallback: `${BASE_PATH}index.html`,
+                navigateFallbackDenylist: [/^\/daily-checkin\/api\//, /^\/daily-checkin\/auth\//, /^\/daily-checkin\/socket\.io\//, /^\/mtss(?:\/|$)/],
                 // Disable auto service worker registration since we handle it manually
                 skipWaiting: true,
                 clientsClaim: true
@@ -217,6 +225,34 @@ export default defineConfig({
     server: {
         port: 5174,
         proxy: {
+            // The app is served under BASE_PATH ('/daily-checkin/'), so the
+            // client calls /daily-checkin/api, /daily-checkin/auth and
+            // /daily-checkin/socket.io. Mirror the production gateway
+            // (frontend/nginx.conf) and strip the prefix before forwarding
+            // to the backend. Keep the unprefixed entries below for
+            // standalone dev (VITE_BASE_PATH='/').
+            '/daily-checkin/api': {
+                target: 'http://localhost:3003',
+                changeOrigin: true,
+                secure: false,
+                rewrite: (p) => p.replace(/^\/daily-checkin/, '')
+            },
+            '/daily-checkin/auth': {
+                target: 'http://localhost:3003',
+                changeOrigin: true,
+                secure: false,
+                // /daily-checkin/auth/callback is an SPA route, not a backend route.
+                bypass: (req) =>
+                    req.url?.startsWith('/daily-checkin/auth/callback') ? '/daily-checkin/index.html' : undefined,
+                rewrite: (p) => p.replace(/^\/daily-checkin/, '')
+            },
+            '/daily-checkin/socket.io': {
+                target: 'http://localhost:3003',
+                changeOrigin: true,
+                secure: false,
+                ws: true,
+                rewrite: (p) => p.replace(/^\/daily-checkin/, '')
+            },
             '/api': {
                 target: 'http://localhost:3003',
                 changeOrigin: true,

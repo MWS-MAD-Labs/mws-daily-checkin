@@ -32,7 +32,6 @@ const OAUTH_ERROR_MESSAGES = {
   missing_data: 'Sign-in response was incomplete. Please try again.',
   missing_role: 'Your account has no role assigned. Contact an administrator.',
   callback_failed: 'Sign-in failed while completing the redirect. Please try again.',
-  oauth_failed: 'Google sign-in failed. Please try again.',
 };
 
 const HeroSection = memo(() => {

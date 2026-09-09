@@ -12,18 +12,23 @@ import { clearStoredAuthSession, getStoredAuthToken, getStoredAuthUserRaw } from
 
 syncInitialTheme();
 
-// Initialize auth state from localStorage
-const token = getStoredAuthToken();
+// Optimistically seed auth state from the cached user profile so protected
+// pages don't flash a login screen while fetchCurrentUser() below confirms
+// the real session - which lives in an httpOnly cookie now, not here.
+// hasSessionMarker is a non-sensitive marker (see utils/authStorage.js),
+// not a credential.
+const hasSessionMarker = getStoredAuthToken();
 const user = getStoredAuthUserRaw();
 
-if (token && user) {
+if (hasSessionMarker && user) {
     try {
         const userData = JSON.parse(user);
         store.dispatch({
             type: 'auth/setUser',
-            payload: { user: userData, token }
+            payload: { user: userData }
         });
-        // Validate persisted token before rendering protected pages.
+        // Validate against the actual cookie-backed session before
+        // rendering protected pages.
         store.dispatch(fetchCurrentUser());
     } catch (error) {
         console.error('Error parsing stored user data:', error);
@@ -48,10 +53,19 @@ if ('serviceWorker' in navigator) {
     });
 }
 
+// daily-checkin is served under /daily-checkin by the gateway. The router
+// basename must match vite `base` (import.meta.env.BASE_URL = '/daily-checkin/').
+// Drop the trailing slash for the React Router basename (e.g. '/daily-checkin') -
+// same as MTSS's own main.jsx does for '/mtss/'. Every existing
+// navigate()/<Link to> call keeps working unchanged once this is set -
+// React Router applies the prefix transparently, and useLocation().pathname
+// already strips it back off.
+const ROUTER_BASENAME = import.meta.env.BASE_URL.replace(/\/$/, '');
+
 ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
         <Provider store={store}>
-            <BrowserRouter>
+            <BrowserRouter basename={ROUTER_BASENAME}>
                 <App />
                 <Toaster />
             </BrowserRouter>

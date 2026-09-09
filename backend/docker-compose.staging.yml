@@ -10,6 +10,11 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3003
+      # NOTE: staging runs on a different domain (mws.web.id) than
+      # production (millenniaws.sch.id) - unclear whether staging shares
+      # production's "one app, /daily-checkin + /mtss path prefix" gateway
+      # topology at all. Confirm with whoever owns the gateway before
+      # assuming this needs the same /daily-checkin suffix treatment.
       FRONTEND_URL: https://app-stg.mws.web.id
       CORS_ORIGINS: https://app-stg.mws.web.id
       OPENROUTER_APP_NAME: IntegraLearn AI Chat Staging
