@@ -5,6 +5,18 @@ import { clearStoredAuthSession } from '@/utils/authStorage';
 // Default to versioned API to match backend routing
 const API_BASE_URL = import.meta.env.VITE_API_BASE || '/api/v1';
 
+// The backend mounts /auth as its own sibling namespace next to /api
+// (see backend/src/app.js: app.use('/auth', ...) and app.use('/api', ...)
+// are two separate registrations) - it is NOT nested under /api/v1. Calls
+// below that reuse API_BASE_URL for an /auth/* path would silently target
+// a URL like /daily-checkin/api/v1/auth/login, which nginx happily proxies
+// to the backend, but the backend has no such route and 404s. This mirrors
+// import.meta.env.BASE_URL directly (same value AuthCallback.jsx and the
+// 401 handler below already use to bypass React Router) rather than
+// VITE_API_BASE, since it's the gateway path prefix these routes actually
+// need - '/daily-checkin' in production, '/' in standalone local dev.
+const AUTH_BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, '');
+
 // Create axios instance with default config
 const api = axios.create({
     baseURL: API_BASE_URL,
@@ -53,8 +65,10 @@ api.interceptors.response.use(
             // Requests to other proxied services (e.g. /mtss/api/v1) override
             // baseURL per-call - a 401 there is that service's own auth
             // rejecting us, not a sign our own session is invalid. Only treat
-            // 401s from our own API (default baseURL) as a real auth failure.
-            const isOwnApiRequest = !requestBaseUrl || requestBaseUrl === API_BASE_URL;
+            // 401s from our own API or auth routes (this app's two own
+            // baseURLs) as a real auth failure.
+            const isOwnApiRequest =
+                !requestBaseUrl || requestBaseUrl === API_BASE_URL || requestBaseUrl === AUTH_BASE_URL;
             const requestPath = String(error?.config?.url || '');
             const isLoginRequest = /\/auth\/login$/i.test(requestPath);
             if (isOwnApiRequest && !isLoginRequest) {
@@ -87,12 +101,12 @@ api.interceptors.response.use(
 
 // Auth API functions
 export const login = async (email, password) => {
-    const response = await api.post('/auth/login', { email, password });
+    const response = await api.post('/auth/login', { email, password }, { baseURL: AUTH_BASE_URL });
     return response;
 };
 
 export const logout = async () => {
-    const response = await api.post('/auth/logout');
+    const response = await api.post('/auth/logout', undefined, { baseURL: AUTH_BASE_URL });
 
     clearStoredAuthSession();
 
@@ -112,12 +126,12 @@ export const logout = async () => {
 };
 
 export const getCurrentUser = async () => {
-    const response = await api.get('/auth/me');
+    const response = await api.get('/auth/me', { baseURL: AUTH_BASE_URL });
     return response;
 };
 
 export const registerUser = async (userData) => {
-    const response = await api.post('/auth/register', userData);
+    const response = await api.post('/auth/register', userData, { baseURL: AUTH_BASE_URL });
     return response;
 };
 
