@@ -3,13 +3,15 @@ import { startGlobalLoading, stopGlobalLoading } from '@/lib/loadingManager';
 import { clearStoredAuthSession } from '@/utils/authStorage';
 
 // import.meta.env.BASE_URL is '/daily-checkin/' in production
-// (vite.config.js), '/' in standalone local dev. VITE_API_BASE is an
-// optional override; when unset (Komodo has never actually set this build
-// arg - confirmed by grepping the deployed bundle) the default MUST still
-// resolve to the gateway-prefixed path, not a bare '/api/v1' - a bare path
-// has no matching nginx location in production and 404s.
+// (vite.config.js), '/' in standalone local dev. Deliberately NOT reading
+// VITE_API_BASE here anymore - Komodo has had this build arg set to a bare
+// '/api/v1' (missing the gateway prefix) at least once already, which
+// silently overrode a correct fallback and 404s in production (no nginx
+// location matches a bare '/api/v1'). Deriving straight from BASE_URL, the
+// same source AUTH_BASE_URL below already relies on, can't drift out of
+// sync with it the way a separately-configured env var can.
 const GATEWAY_BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
-const API_BASE_URL = import.meta.env.VITE_API_BASE || `${GATEWAY_BASE}/api/v1`;
+const API_BASE_URL = `${GATEWAY_BASE}/api/v1`;
 
 // The backend mounts /auth as its own sibling namespace next to /api
 // (see backend/src/app.js: app.use('/auth', ...) and app.use('/api', ...)

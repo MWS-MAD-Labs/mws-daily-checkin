@@ -57,9 +57,10 @@ export const useEmotionAnalysis = ({ toast, setStage, fallbackStage = "intro" })
             const formData = new FormData();
             formData.append("image", blob, "emotion_capture.jpg");
 
-            // See authService.js's API_BASE_URL comment - a bare '/api/v1'
-            // fallback has no matching nginx location in production.
-            const apiBase = import.meta.env.VITE_API_BASE || `${import.meta.env.BASE_URL.replace(/\/$/, '')}/api/v1`;
+            // See authService.js's API_BASE_URL comment - deliberately not
+            // reading VITE_API_BASE, which Komodo has had set to a bare
+            // '/api/v1' (no gateway prefix, 404s in production) before.
+            const apiBase = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/api/v1`;
             const controller = new AbortController();
             timeoutId = window.setTimeout(() => controller.abort(), ANALYSIS_TIMEOUT_MS);
             const apiResponse = await fetch(`${apiBase}/checkin/emotion/analyze`, {
