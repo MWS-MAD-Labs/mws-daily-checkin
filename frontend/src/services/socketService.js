@@ -60,10 +60,17 @@ class SocketService {
             return this.socket;
         }
 
-        const rawBase = import.meta.env.VITE_API_BASE || '/api/v1';
-        const API_BASE = rawBase.replace(/\/api(?:\/v\d+)?\/?$/, '');
+        // Passing a path-only string as io()'s first arg sets the Socket.IO
+        // *namespace*, not the HTTP path - it doesn't add a URL prefix at
+        // all. The gateway prefix (/daily-checkin in production, matching
+        // nginx's `location /daily-checkin/socket.io/`) has to go through
+        // the `path` option instead, with no uri arg so it connects
+        // same-origin on the default "/" namespace. Mirrors MTSS's own
+        // socketService.js, which uses this same shape in production.
+        const gatewayBase = import.meta.env.BASE_URL.replace(/\/$/, '');
 
-        this.socket = io(API_BASE, {
+        this.socket = io({
+            path: `${gatewayBase}/socket.io`,
             transports: ['websocket', 'polling'],
             timeout: 20000,
         });

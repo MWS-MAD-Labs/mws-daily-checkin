@@ -2,20 +2,22 @@ import axios from 'axios';
 import { startGlobalLoading, stopGlobalLoading } from '@/lib/loadingManager';
 import { clearStoredAuthSession } from '@/utils/authStorage';
 
-// Default to versioned API to match backend routing
-const API_BASE_URL = import.meta.env.VITE_API_BASE || '/api/v1';
+// import.meta.env.BASE_URL is '/daily-checkin/' in production
+// (vite.config.js), '/' in standalone local dev. VITE_API_BASE is an
+// optional override; when unset (Komodo has never actually set this build
+// arg - confirmed by grepping the deployed bundle) the default MUST still
+// resolve to the gateway-prefixed path, not a bare '/api/v1' - a bare path
+// has no matching nginx location in production and 404s.
+const GATEWAY_BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+const API_BASE_URL = import.meta.env.VITE_API_BASE || `${GATEWAY_BASE}/api/v1`;
 
 // The backend mounts /auth as its own sibling namespace next to /api
 // (see backend/src/app.js: app.use('/auth', ...) and app.use('/api', ...)
 // are two separate registrations) - it is NOT nested under /api/v1. Calls
 // below that reuse API_BASE_URL for an /auth/* path would silently target
 // a URL like /daily-checkin/api/v1/auth/login, which nginx happily proxies
-// to the backend, but the backend has no such route and 404s. This mirrors
-// import.meta.env.BASE_URL directly (same value AuthCallback.jsx and the
-// 401 handler below already use to bypass React Router) rather than
-// VITE_API_BASE, since it's the gateway path prefix these routes actually
-// need - '/daily-checkin' in production, '/' in standalone local dev.
-const AUTH_BASE_URL = import.meta.env.BASE_URL.replace(/\/$/, '');
+// to the backend, but the backend has no such route and 404s.
+const AUTH_BASE_URL = GATEWAY_BASE;
 
 // Create axios instance with default config
 const api = axios.create({
