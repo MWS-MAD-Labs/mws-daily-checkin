@@ -31,6 +31,12 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 # match naturally, same as MTSS does for its own /mtss subdir.
 COPY --from=build /app/dist /usr/share/nginx/html/daily-checkin
 
+# Kill switch for any browser still running the pre-migration service
+# worker, registered at scope '/' from either of these exact paths. See
+# legacy-root-sw-kill.js for what it does once a client picks it up.
+COPY legacy-root-sw-kill.js /usr/share/nginx/html/sw.js
+COPY legacy-root-sw-kill.js /usr/share/nginx/html/mws-sw.js
+
 # Health check (uses /healthz; root '/' redirects to /daily-checkin/)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:80/healthz || exit 1
