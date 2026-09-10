@@ -809,6 +809,13 @@ const getDashboardStats = async (req, res) => {
                 const memberIds = memberList.map(member => member._id);
 
                 if (memberIds.length > 0) {
+                    // Atlas free/shared tiers (M0/M2/M5) reject allowDiskUse
+                    // outright, so a $sort over the whole collection before
+                    // $group still blows the 32MB in-memory sort limit as
+                    // this dataset grows. $top picks the latest document per
+                    // group without a preceding global sort - each group's
+                    // top candidate is tracked incrementally, so memory use
+                    // scales with the number of members, not total checkins.
                     const latestCheckins = await EmotionalCheckin.aggregate([
                         {
                             $addFields: {
@@ -818,17 +825,16 @@ const getDashboardStats = async (req, res) => {
                             }
                         },
                         { $match: { resolvedUserId: { $in: memberIds } } },
-                        { $sort: { date: -1 } },
                         {
                             $group: {
                                 _id: '$resolvedUserId',
-                                lastCheckin: { $first: '$$ROOT' },
+                                lastCheckin: { $top: { sortBy: { date: -1 }, output: '$$ROOT' } },
                                 totalCheckins: { $sum: 1 },
                                 avgPresence: { $avg: '$presenceLevel' },
                                 avgCapacity: { $avg: '$capacityLevel' }
                             }
                         }
-                    ], { allowDiskUse: true });
+                    ]);
 
                     const latestMap = new Map();
                     latestCheckins.forEach(entry => {

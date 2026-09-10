@@ -223,7 +223,7 @@ export default defineConfig({
         }
     },
     server: {
-        port: 8090,
+        port: 5174,
         proxy: {
             // The app is served under BASE_PATH ('/daily-checkin/'), so the
             // client calls /daily-checkin/api, /daily-checkin/auth and

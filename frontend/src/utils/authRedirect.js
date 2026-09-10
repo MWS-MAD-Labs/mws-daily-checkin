@@ -1,5 +1,14 @@
 const PENDING_AUTH_REDIRECT_KEY = "pending_auth_redirect";
 
+// React Router's basename ('/daily-checkin', main.jsx) already strips the
+// app prefix off location.pathname, so a legitimate value here never starts
+// with another app's own path segment. A stray '/mtss/...' (or similar)
+// only shows up when the browser previously loaded a sibling app's page
+// under this origin - e.g. nginx's /mtss/ fallback proxy serving this
+// container's own index.html when its upstream is unreachable - and
+// ProtectedRoute captured that foreign pathname as a pending redirect.
+const FOREIGN_APP_PREFIXES = ["/mtss", "/daily-checkin"];
+
 export const sanitizeRedirectPath = (value) => {
     if (typeof value !== "string") return null;
 
@@ -9,6 +18,10 @@ export const sanitizeRedirectPath = (value) => {
     }
 
     if (trimmed.startsWith("/auth/callback")) {
+        return null;
+    }
+
+    if (FOREIGN_APP_PREFIXES.some((prefix) => trimmed === prefix || trimmed.startsWith(`${prefix}/`))) {
         return null;
     }
 
