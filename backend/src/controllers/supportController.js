@@ -222,27 +222,18 @@ const getSupportContacts = async (req, res) => {
                 // their unit principal, and school psychologist.
                 contactableRoles = [];
 
-                // Principal per unit + Ms. Wina as school psychologist (lookup by email for reliability)
-                if (userDepartment === 'Elementary') {
-                    specificUsers = [
-                        { email: 'kholida@millennia21.id', contactCategory: 'principal' },
-                        { email: 'wina@millennia21.id', contactCategory: 'psychologist' }
-                    ];
-                } else if (userDepartment === 'Junior High') {
-                    specificUsers = [
-                        { email: 'aria@millennia21.id', contactCategory: 'principal' },
-                        { email: 'wina@millennia21.id', contactCategory: 'psychologist' }
-                    ];
-                } else if (userDepartment === 'Kindergarten') {
-                    specificUsers = [
-                        { email: 'mahrukh@millennia21.id', contactCategory: 'principal' },
-                        { email: 'wina@millennia21.id', contactCategory: 'psychologist' }
-                    ];
-                } else {
-                    specificUsers = [
-                        { email: 'wina@millennia21.id', contactCategory: 'psychologist' }
-                    ];
-                }
+                // Principal of the student's own unit + the school
+                // psychologist, both matched by role instead of a specific
+                // person's email. Central is the source of truth for who
+                // currently holds either position - job_level "Head Unit"
+                // for a given unit, job_position "School's Psychologist" -
+                // see jobLevelRoleMapping.js. Whoever Central says holds the
+                // job shows up here automatically, no code change needed
+                // when the person changes.
+                specificUsers = [
+                    { role: 'head_unit', unit: userDepartment, contactCategory: 'principal' },
+                    { role: 'counselor', contactCategory: 'psychologist' }
+                ];
                 break;
             case 'teacher':
             case 'staff':
@@ -274,11 +265,14 @@ const getSupportContacts = async (req, res) => {
             supportUsers = [...roleBasedUsers];
         }
 
-        // Add specific contacts for students (principal + psychologist) by email
+        // Add specific contacts for students (principal by role+unit, psychologist by role)
         if (userRole === 'student' && specificUsers.length > 0) {
             for (const specificUser of specificUsers) {
+                const matcher = specificUser.role
+                    ? { role: specificUser.role, ...(specificUser.unit ? { unit: specificUser.unit } : {}) }
+                    : { email: specificUser.email };
                 const foundUser = await User.findOne({
-                    email: specificUser.email,
+                    ...matcher,
                     isActive: true
                 })
                     .select('name username email department employeeId role jobLevel unit jobPosition gender');

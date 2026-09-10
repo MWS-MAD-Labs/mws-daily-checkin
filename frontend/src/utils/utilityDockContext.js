@@ -46,7 +46,12 @@ const readTableCellText = (cell) => {
 
 const isEmotionalPatternsRoute = (pathname = '') => /\/profile\/emotional-patterns/i.test(String(pathname || '').trim());
 const isEmotionalHistoryRoute = (pathname = '') => /\/profile\/emotional-history/i.test(String(pathname || '').trim());
-const isSupportHubRoute = (pathname = '') => /\/(?:student\/support-hub|support-hub)\b/i.test(String(pathname || '').trim());
+// Staff/teacher "home" moved from /support-hub (a since-removed duplicate of
+// the real Hub) to /home (nested under the app's own /daily-checkin
+// basename, stripped off already by the time pathname gets here - see
+// main.jsx) - matched here too (plus the old /select-role URL, kept as a
+// redirect) so assistant context detection keeps working for that page.
+const isSupportHubRoute = (pathname = '') => /\/(?:student\/support-hub|support-hub|select-role|home)\b/i.test(String(pathname || '').trim());
 const isMtssRoute = (pathname = '') => /\/mtss\//i.test(String(pathname || '').trim());
 const isAssistantRoute = (pathname = '') => /\/(?:ai-assistant|student\/ai-chat)\b/i.test(String(pathname || '').trim());
 const isEmotionalDashboardRoute = (pathname = '') => /\/emotional-checkin\/(?:dashboard|teacher-dashboard)\b/i.test(String(pathname || '').trim());

@@ -21,11 +21,10 @@ const STUDENT_ALLOWED_ROUTES = new Set([
 
 const WORKFORCE_BASE_ROUTES = new Set([
     ...COMMON_ALLOWED_ROUTES,
-    '/support-hub',
     '/emotional-checkin',
     '/emotional-checkin/staff',
     '/mtss',
-    '/select-role'
+    '/home'
 ]);
 
 const NAVIGATION_CUE_REGEX = /(bawa(kan)?|antar(kan)?|mau ke|ingin ke|ke halaman|pindah(kan)?|arahin|arahkan|redirect|go to|open|navigate|buka(\s+halaman)?|masuk ke|take me|bring me|visit|show me)/i;
@@ -118,8 +117,8 @@ const WORKFORCE_ROUTE_INTENTS = [
     },
     {
         intent: 'open_support_hub',
-        label: 'Support Hub',
-        navigateTo: '/support-hub',
+        label: 'Home',
+        navigateTo: '/home',
         patterns: [/(support hub|halaman support|wellbeing activity|hub support)/i]
     },
     {
@@ -155,7 +154,7 @@ const WORKFORCE_ROUTE_INTENTS = [
     {
         intent: 'open_role_selection',
         label: 'Role Selection',
-        navigateTo: '/select-role',
+        navigateTo: '/home',
         patterns: [/(role selection|select role|pilih role|pilih peran)/i]
     },
     {

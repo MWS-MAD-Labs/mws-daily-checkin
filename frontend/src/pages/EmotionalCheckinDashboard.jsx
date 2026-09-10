@@ -137,7 +137,7 @@ const EmotionalCheckinDashboard = memo(function EmotionalCheckinDashboard() {
         }
 
         console.log('User not authorized for dashboard:', { user });
-        navigate('/support-hub', { replace: true });
+        navigate('/home', { replace: true });
     }, [canViewDashboard, dispatch, isDirectorate, navigate, selectedPeriod, resolvedDateFilter, user]);
 
     useEffect(() => {

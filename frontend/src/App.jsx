@@ -3,6 +3,8 @@ import { useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import AppHelmet from '@/components/app/AppHelmet';
 import RouteConfig from '@/components/app/RouteConfig';
+import { useCrossTabAuthSync } from '@/hooks/useCrossTabAuthSync';
+import { useSilentHubRelogin } from '@/hooks/useSilentHubRelogin';
 
 const BackgroundDecor = lazy(() => import('@/components/app/BackgroundDecor'));
 const WorkforceHumanisticLayer = lazy(() => import('@/components/app/WorkforceHumanisticLayer'));
@@ -17,6 +19,9 @@ const App = memo(() => {
     const location = useLocation();
     const aosRef = useRef(null);
     const [showEnhancements, setShowEnhancements] = useState(false);
+
+    useCrossTabAuthSync();
+    useSilentHubRelogin();
 
     useEffect(() => {
         let isDisposed = false;
@@ -40,15 +45,19 @@ const App = memo(() => {
                 .catch(() => {});
         };
 
+        // Timeout is a worst-case ceiling, not the normal wait - kept short
+        // so this doesn't compound with an already-slow load (e.g. right
+        // after an SSO redirect chain) into a second, late-arriving wave of
+        // visual changes on top of the first paint.
         if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-            const idleId = window.requestIdleCallback(initAOS, { timeout: 2000 });
+            const idleId = window.requestIdleCallback(initAOS, { timeout: 800 });
             return () => {
                 isDisposed = true;
                 window.cancelIdleCallback?.(idleId);
             };
         }
 
-        const timeoutId = window.setTimeout(initAOS, 600);
+        const timeoutId = window.setTimeout(initAOS, 400);
         return () => {
             isDisposed = true;
             window.clearTimeout(timeoutId);
@@ -66,15 +75,18 @@ const App = memo(() => {
             if (!disposed) setShowEnhancements(true);
         };
 
+        // Same reasoning as the AOS timeout above - a short ceiling keeps
+        // background/decor layers arriving close enough to first paint that
+        // they read as part of the same load, not a late second wave.
         if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-            const idleId = window.requestIdleCallback(enableEnhancements, { timeout: 1500 });
+            const idleId = window.requestIdleCallback(enableEnhancements, { timeout: 600 });
             return () => {
                 disposed = true;
                 window.cancelIdleCallback?.(idleId);
             };
         }
 
-        const timeoutId = window.setTimeout(enableEnhancements, 280);
+        const timeoutId = window.setTimeout(enableEnhancements, 150);
         return () => {
             disposed = true;
             window.clearTimeout(timeoutId);

@@ -8,7 +8,7 @@ export const fetchSupportContacts = createAsyncThunk(
         try {
             // Check if user is authenticated
             const { auth } = getState();
-            if (!auth.isAuthenticated || !auth.token) {
+            if (!auth.isAuthenticated) {
                 return rejectWithValue('User not authenticated');
             }
 

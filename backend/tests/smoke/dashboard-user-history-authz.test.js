@@ -63,7 +63,7 @@ describe('Dashboard user-history authorization', () => {
     expect(sendError).not.toHaveBeenCalled();
   });
 
-  test('blocks head_unit from accessing user outside unit', async () => {
+  test('allows head_unit to access user outside their own unit (company-wide access, same as directorate)', async () => {
     mockTargetUser({ unit: 'Junior High', department: 'Junior High' });
 
     const req = {
@@ -73,8 +73,8 @@ describe('Dashboard user-history authorization', () => {
 
     await getUserCheckinHistory(req, {});
 
-    expect(sendError).toHaveBeenCalledWith({}, 'Access denied for this user', 403);
-    expect(sendSuccess).not.toHaveBeenCalled();
+    expect(sendSuccess).toHaveBeenCalled();
+    expect(sendError).not.toHaveBeenCalled();
   });
 
   test('returns 404 when target user does not exist', async () => {

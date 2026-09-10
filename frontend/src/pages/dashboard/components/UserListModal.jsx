@@ -1,7 +1,10 @@
 import React, { memo } from "react";
+import { useNavigate } from "react-router-dom";
 import { X, Users, TrendingUp, Cloud, Smile, AlertCircle } from "lucide-react";
 
 const UserListModal = memo(({ isOpen, onClose, title, users, totalUsers, type }) => {
+    const navigate = useNavigate();
+
     if (!isOpen) return null;
 
     const sortedUsers = users ? [...users].sort() : [];
@@ -62,8 +65,7 @@ const UserListModal = memo(({ isOpen, onClose, title, users, totalUsers, type })
                                             // Navigate to individual user report
                                             const userId = users[index]?.userId || users[index]?.id;
                                             if (userId) {
-                                                // Use React Router navigation instead of window.open for better UX
-                                                window.location.href = `/emotional-wellness/${userId}`;
+                                                navigate(`/emotional-wellness/${userId}`);
                                             }
                                         }
                                     }}

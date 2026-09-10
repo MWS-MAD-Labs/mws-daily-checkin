@@ -938,7 +938,7 @@ const ProfilePage = memo(function ProfilePage() {
         persistCheckinUsageSnapshot(updated);
         setCheckinUsage({ ...updated, ready: true });
         const isStudent = currentUser?.role === 'student';
-        navigate(isStudent ? "/student/support-hub" : "/support-hub");
+        navigate(isStudent ? "/student/support-hub" : "/home");
     }, [navigate, toast, currentUser]);
 
     // Derived info for today's check-in
@@ -1016,7 +1016,7 @@ const ProfilePage = memo(function ProfilePage() {
                 key: "emotional-checkin",
                 icon: Sparkles,
                 title: "Emotional Check-in",
-                to: isStudent ? "/student/support-hub" : "/support-hub",
+                to: isStudent ? "/student/support-hub" : "/home",
                 onClick: handleEmotionalCheckin,
                 disabled: checkinLimitReached,
                 description: checkinDescription,
@@ -1103,12 +1103,19 @@ const ProfilePage = memo(function ProfilePage() {
     // Logout handler
     const handleLogout = async () => {
         try {
-            await dispatch(logoutUser()).unwrap();
-            navigate("/");
+            const result = await dispatch(logoutUser()).unwrap();
+            // If a Hub redirect is already navigating the tab away, don't
+            // also push a local route - that races the Hub nav.
+            // window.location.assign, not navigate("/") - under this app's
+            // basename, react-router resolves bare "/" to the base path
+            // WITHOUT a trailing slash, which a reload sends straight into
+            // Vite's dev server (or a strict-prefix static host) rejecting
+            // it before the SPA loads. BASE_URL always ends in "/".
+            if (!result?.redirectedToHub) window.location.assign(import.meta.env.BASE_URL);
         } catch (error) {
             console.error('Logout failed:', error);
             // Still navigate to landing page even if logout API fails
-            navigate("/");
+            window.location.assign(import.meta.env.BASE_URL);
         }
     };
 

@@ -1,27 +1,68 @@
 import axios from 'axios';
 import { startGlobalLoading, stopGlobalLoading } from '@/lib/loadingManager';
+import { clearStoredAuthSession } from '@/utils/authStorage';
 
-// Default to versioned API to match backend routing
-const API_BASE_URL = import.meta.env.VITE_API_BASE || '/api/v1';
+// import.meta.env.BASE_URL is '/daily-checkin/' in production
+// (vite.config.js), '/' in standalone local dev. Deliberately NOT reading
+// VITE_API_BASE here anymore - Komodo has had this build arg set to a bare
+// '/api/v1' (missing the gateway prefix) at least once already, which
+// silently overrode a correct fallback and 404s in production (no nginx
+// location matches a bare '/api/v1'). Deriving straight from BASE_URL, the
+// same source AUTH_BASE_URL below already relies on, can't drift out of
+// sync with it the way a separately-configured env var can.
+const GATEWAY_BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+const API_BASE_URL = `${GATEWAY_BASE}/api/v1`;
+
+// The backend mounts /auth as its own sibling namespace next to /api
+// (see backend/src/app.js: app.use('/auth', ...) and app.use('/api', ...)
+// are two separate registrations) - it is NOT nested under /api/v1. Calls
+// below that reuse API_BASE_URL for an /auth/* path would silently target
+// a URL like /daily-checkin/api/v1/auth/login, which nginx happily proxies
+// to the backend, but the backend has no such route and 404s.
+const AUTH_BASE_URL = GATEWAY_BASE;
+
+// Set right before logout()'s own window.location.assign(hubLogoutUrl)
+// below, so the 401 interceptor further down can tell a Hub redirect is
+// already in flight. Without this, any OTHER in-flight request (a
+// notification poller, a background refetch, anything else on the page
+// making an API call around the same moment) sees its cookie already
+// cleared server-side, 401s, and the interceptor's own
+// window.location.assign(BASE_URL) below can win the race against the
+// logout's cross-origin navigate - landing the user back on this app's own
+// landing page instead of Hub, depending on which network response comes
+// back first.
+let hubRedirectInFlight = false;
+
+// Exported so useSilentHubRelogin can check it too - that hook's own hidden
+// iframe attempt fires the instant Redux flips isAuthenticated to false,
+// which can be BEFORE this app's own cross-origin window.location.assign
+// to Hub has actually landed (Hub's session cookie is still valid on
+// Hub's side until the navigate completes). Left unguarded, the iframe's
+// silent relogin can succeed mid-navigate and undo the logout entirely -
+// useCrossTabAuthSync picks up its localStorage write and routes this tab
+// straight back to a logged-in page before the browser ever reaches Hub.
+export const isHubRedirectInFlight = () => hubRedirectInFlight;
 
 // Create axios instance with default config
 const api = axios.create({
     baseURL: API_BASE_URL,
     timeout: 45000,
+    // The session lives in an httpOnly cookie now (see backend
+    // utils/authCookie.js) instead of a token this app attaches itself -
+    // withCredentials is what makes the browser actually send it.
+    withCredentials: true,
     headers: {
         'Content-Type': 'application/json',
     },
 });
 
-// Request interceptor to add auth token
+// Request interceptor - loading indicator only now. Auth is carried by the
+// httpOnly cookie automatically; there's no token for this app's own JS to
+// attach anymore.
 api.interceptors.request.use(
     (config) => {
         if (!config?.skipGlobalLoading) {
             startGlobalLoading();
-        }
-        const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
         }
         return config;
     },
@@ -50,8 +91,10 @@ api.interceptors.response.use(
             // Requests to other proxied services (e.g. /mtss/api/v1) override
             // baseURL per-call - a 401 there is that service's own auth
             // rejecting us, not a sign our own session is invalid. Only treat
-            // 401s from our own API (default baseURL) as a real auth failure.
-            const isOwnApiRequest = !requestBaseUrl || requestBaseUrl === API_BASE_URL;
+            // 401s from our own API or auth routes (this app's two own
+            // baseURLs) as a real auth failure.
+            const isOwnApiRequest =
+                !requestBaseUrl || requestBaseUrl === API_BASE_URL || requestBaseUrl === AUTH_BASE_URL;
             const requestPath = String(error?.config?.url || '');
             const isLoginRequest = /\/auth\/login$/i.test(requestPath);
             if (isOwnApiRequest && !isLoginRequest) {
@@ -66,11 +109,21 @@ api.interceptors.response.use(
                 ];
                 const shouldResetAuth = !msg || authFailureHints.some((hint) => msg.includes(hint));
                 if (shouldResetAuth) {
-                    localStorage.removeItem('auth_token');
-                    localStorage.removeItem('auth_user');
-                    localStorage.removeItem('token');
-                    if (typeof window !== 'undefined' && window.location.pathname !== '/') {
-                        window.location.assign('/');
+                    clearStoredAuthSession();
+                    // import.meta.env.BASE_URL is '/daily-checkin/' in
+                    // production (vite.config.js), '/' in standalone local
+                    // dev - this bypasses React Router, so it needs the
+                    // prefix added explicitly rather than getting it from a
+                    // basename. Skipped entirely while a Hub redirect is
+                    // already underway (see hubRedirectInFlight above) - this
+                    // would otherwise race it and can win, landing the user
+                    // back here instead of at Hub.
+                    if (
+                        !hubRedirectInFlight &&
+                        typeof window !== 'undefined' &&
+                        window.location.pathname !== import.meta.env.BASE_URL
+                    ) {
+                        window.location.assign(import.meta.env.BASE_URL);
                     }
                 }
             }
@@ -81,22 +134,56 @@ api.interceptors.response.use(
 
 // Auth API functions
 export const login = async (email, password) => {
-    const response = await api.post('/auth/login', { email, password });
+    const response = await api.post('/auth/login', { email, password }, { baseURL: AUTH_BASE_URL });
     return response;
 };
 
 export const logout = async () => {
-    const response = await api.post('/auth/logout');
-    return response;
+    // Set before the request even fires: the backend clears this app's
+    // cookie as part of handling it, so another in-flight request can 401
+    // and race the interceptor above against this function's own
+    // window.location.assign below starting from that moment, not just
+    // after this response comes back.
+    hubRedirectInFlight = true;
+
+    let response;
+    try {
+        response = await api.post('/auth/logout', undefined, { baseURL: AUTH_BASE_URL });
+    } catch (error) {
+        // The request itself failed - nothing is navigating away, so don't
+        // leave the interceptor permanently suppressed for the rest of the
+        // session.
+        hubRedirectInFlight = false;
+        throw error;
+    }
+
+    clearStoredAuthSession();
+
+    // The backend tells us where to go so the Hub session ends too. It has to
+    // be a real navigation: Hub's cookie lives on Hub's domain, so nothing
+    // this app calls from the background can clear it. Every caller of
+    // logout() gets this for free by living in one place.
+    const hubLogoutUrl = response?.data?.data?.hubLogoutUrl;
+    if (hubLogoutUrl) {
+        window.location.assign(hubLogoutUrl);
+        // Signal callers to NOT also navigate locally - that would race
+        // against this cross-origin navigation and can flash/override it.
+        return { redirectedToHub: true };
+    }
+
+    // No hubLogoutUrl - nothing is actually navigating away, so let the
+    // interceptor resume its normal behavior for any future 401.
+    hubRedirectInFlight = false;
+    return { redirectedToHub: false };
 };
 
 export const getCurrentUser = async () => {
-    const response = await api.get('/auth/me');
+    const response = await api.get('/auth/me', { baseURL: AUTH_BASE_URL });
     return response;
 };
 
 export const registerUser = async (userData) => {
-    const response = await api.post('/auth/register', userData);
+    const response = await api.post('/auth/register', userData, { baseURL: AUTH_BASE_URL });
     return response;
 };
 

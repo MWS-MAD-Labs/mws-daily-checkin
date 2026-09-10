@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const mongoose = require('mongoose');
 const winston = require('winston');
@@ -12,6 +13,8 @@ const { initSocket } = require('./config/socket');
 const slackSocketService = require('./services/slackSocketService');
 const { createCorsOriginChecker, validateCorsConfiguration } = require('./config/cors');
 const employeeRosterSync = require('./jobs/employeeRosterSync');
+const studentRosterSync = require('./jobs/studentRosterSync');
+const classAssignmentSync = require('./jobs/classAssignmentSync');
 
 // Import routes
 const routes = require('./routes');
@@ -69,6 +72,10 @@ app.use('/api/', apiLimiter);
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Reads the httpOnly session cookie middleware/auth.js's authenticate()
+// checks - CORS above already sets credentials:true so the browser
+// actually sends it cross-subdomain.
+app.use(cookieParser());
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -132,6 +139,17 @@ const initializeApp = async () => {
         // so someone deactivated there gets logged out here too (and a
         // rehired employee gets reactivated) instead of only syncing at login.
         employeeRosterSync.start();
+        // Same safety net for students - a withdrawn/graduated/transferred
+        // student otherwise keeps their 7-day session until it naturally
+        // expires or they log in again.
+        studentRosterSync.start();
+        // Keeps teachers' classes[] in sync with Central's real
+        // ClassTeacherAssignment data - previously only ever set by a
+        // manual, name-matched seed script (scripts/seedUserClassAssignments.js),
+        // so a newly (re-)provisioned account sat at classes: [] until
+        // someone remembered to re-run it, showing zero students on the
+        // daily check-in dashboard for a real teacher.
+        classAssignmentSync.start();
 
         // Test Google AI connection (with graceful fallback for overload and quota)
         try {

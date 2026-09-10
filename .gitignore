@@ -35,3 +35,5 @@ temp.patch
 
 cypress/videos/
 cypress/screenshots/
+
+graphify-out/

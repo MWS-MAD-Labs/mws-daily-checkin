@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { login as loginApi, logout as logoutApi, getCurrentUser } from '../../services/authService';
+import { clearStoredAuthSession, setStoredAuthSession, setStoredAuthUser } from '@/utils/authStorage';
 
 // Async thunks
 export const loginUser = createAsyncThunk(
@@ -20,8 +21,10 @@ export const logoutUser = createAsyncThunk(
     'auth/logoutUser',
     async (_, { rejectWithValue }) => {
         try {
-            await logoutApi();
-            return null;
+            // { redirectedToHub } tells the caller whether a cross-origin
+            // navigation to Hub is already underway, so it knows whether to
+            // also navigate locally.
+            return await logoutApi();
         } catch (error) {
             return rejectWithValue(error.response?.data?.message || 'Logout failed');
         }
@@ -44,9 +47,11 @@ export const fetchCurrentUser = createAsyncThunk(
 );
 
 // Initial state
+// No `token` field - the session lives in an httpOnly cookie the browser
+// manages on its own (see backend utils/authCookie.js). isAuthenticated is
+// the one source of truth for "does this tab currently have a session".
 const initialState = {
     user: null,
-    token: null,
     loading: false,
     error: null,
     isAuthenticated: false,
@@ -62,24 +67,19 @@ const authSlice = createSlice({
         },
         setUser: (state, action) => {
             state.user = action.payload.user;
-            state.token = action.payload.token;
             state.isAuthenticated = true;
             state.loading = false;
             state.error = null;
         },
         loginSuccess: (state, action) => {
             state.user = action.payload.user;
-            state.token = action.payload.token;
             state.isAuthenticated = true;
             state.loading = false;
             state.error = null;
-            // Store in localStorage
-            localStorage.setItem('auth_token', action.payload.token);
-            localStorage.setItem('auth_user', JSON.stringify(action.payload.user));
+            setStoredAuthSession(action.payload);
         },
         clearAuth: (state) => {
             state.user = null;
-            state.token = null;
             state.isAuthenticated = false;
             state.error = null;
         },
@@ -94,12 +94,9 @@ const authSlice = createSlice({
             .addCase(loginUser.fulfilled, (state, action) => {
                 state.loading = false;
                 state.user = action.payload.user;
-                state.token = action.payload.token;
                 state.isAuthenticated = true;
                 state.error = null;
-                // Store in localStorage
-                localStorage.setItem('auth_token', action.payload.token);
-                localStorage.setItem('auth_user', JSON.stringify(action.payload.user));
+                setStoredAuthSession(action.payload);
             })
             .addCase(loginUser.rejected, (state, action) => {
                 state.loading = false;
@@ -113,24 +110,17 @@ const authSlice = createSlice({
             .addCase(logoutUser.fulfilled, (state) => {
                 state.loading = false;
                 state.user = null;
-                state.token = null;
                 state.isAuthenticated = false;
                 state.error = null;
-                // Clear localStorage
-                localStorage.removeItem('auth_token');
-                localStorage.removeItem('auth_user');
-                localStorage.removeItem('token');
+                clearStoredAuthSession();
             })
             .addCase(logoutUser.rejected, (state, action) => {
                 state.loading = false;
                 state.error = action.payload;
                 // Still clear auth state even if logout API fails
                 state.user = null;
-                state.token = null;
                 state.isAuthenticated = false;
-                localStorage.removeItem('auth_token');
-                localStorage.removeItem('auth_user');
-                localStorage.removeItem('token');
+                clearStoredAuthSession();
             })
             // Fetch current user
             .addCase(fetchCurrentUser.pending, (state) => {
@@ -143,7 +133,7 @@ const authSlice = createSlice({
                 state.isAuthenticated = !!userData;
                 state.error = null;
                 if (userData) {
-                    localStorage.setItem('auth_user', JSON.stringify(userData));
+                    setStoredAuthUser(userData);
                 }
             })
             .addCase(fetchCurrentUser.rejected, (state, action) => {
@@ -166,10 +156,7 @@ const authSlice = createSlice({
                 if (shouldClearAuth) {
                     state.isAuthenticated = false;
                     state.user = null;
-                    state.token = null;
-                    localStorage.removeItem('auth_token');
-                    localStorage.removeItem('auth_user');
-                    localStorage.removeItem('token');
+                    clearStoredAuthSession();
                 }
             });
     },

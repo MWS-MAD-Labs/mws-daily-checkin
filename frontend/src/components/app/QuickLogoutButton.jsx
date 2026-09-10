@@ -196,13 +196,23 @@ const QuickMenu = memo(() => {
         setLoading(true);
         dispatch(logoutUser())
             .unwrap()
-            .catch(() => { })
+            .then((result) => {
+                // If a Hub redirect is already navigating the tab away,
+                // don't also push a local route - that races the Hub nav.
+                // window.location.assign, not navigate("/") - under this
+                // app's basename, react-router resolves bare "/" to the base
+                // path WITHOUT a trailing slash, which a reload sends
+                // straight into Vite's dev server (or a strict-prefix static
+                // host) rejecting it before the SPA loads. BASE_URL always
+                // ends in "/".
+                if (!result?.redirectedToHub) window.location.assign(import.meta.env.BASE_URL);
+            })
+            .catch(() => window.location.assign(import.meta.env.BASE_URL))
             .finally(() => {
                 setLoading(false);
                 setConfirming(false);
-                navigate("/");
             });
-    }, [confirming, dispatch, navigate]);
+    }, [confirming, dispatch]);
 
     if (!isAuthenticated) return null;
 

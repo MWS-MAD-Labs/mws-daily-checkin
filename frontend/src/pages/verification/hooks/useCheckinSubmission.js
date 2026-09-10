@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import authService from "@/services/authService";
+import { getStoredAuthToken } from "@/utils/authStorage";
 
 const getSupportBand = (value) => {
     const score = Number(value);
@@ -67,7 +68,7 @@ export const useCheckinSubmission = ({
 
         setIsSubmitting(true);
         try {
-            const token = localStorage.getItem("auth_token") || localStorage.getItem("token");
+            const token = getStoredAuthToken();
 
             if (!token) {
                 toast?.({

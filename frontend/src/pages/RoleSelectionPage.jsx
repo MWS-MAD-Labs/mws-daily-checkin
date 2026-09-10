@@ -9,6 +9,7 @@ import {
   getDelegatedDashboardDetails
 } from "@/utils/accessControl";
 import { prefetchStaffFaceScanOnIntent } from "@/utils/faceScanPrefetch";
+import { getHubBaseUrl } from "@/utils/hubConfig";
 import gsap from "gsap";
 import "@/pages/styles/role-selection-humanistic.css";
 
@@ -17,6 +18,12 @@ const CLD = "https://res.cloudinary.com/deldcwiji/image/upload";
 const cld = (id, w = 300) => `${CLD}/c_scale,w_${w},f_auto,q_auto/${id}.png`;
 const cldJpg = (id, w = 240) => `${CLD}/c_fill,w_${w},h_${Math.round(w * 1.25)},g_face,f_auto,q_auto/${id}.jpg`;
 const RS_ENABLE_FRAMED_CARDS = true;
+const HUB_SUPPORT_PATH = "/support-hub";
+
+const goToHubSupport = async () => {
+  const hubBaseUrl = await getHubBaseUrl();
+  window.location.assign(hubBaseUrl ? `${hubBaseUrl}${HUB_SUPPORT_PATH}` : HUB_SUPPORT_PATH);
+};
 
 const supportsFinePointer = () => {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
@@ -455,7 +462,7 @@ const RoleSelection = memo(() => {
       {/* Back button — only shown for roles with Support Hub access */}
       {hasSupportHubAccess && (
         <div className="absolute top-4 left-4 sm:top-6 sm:left-6 md:top-4 md:left-[130px] z-30">
-          <button onClick={() => navigate('/support-hub')}
+          <button onClick={goToHubSupport}
             className="rs-back-btn inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold text-primary bg-card/80 border border-border/40 shadow-md backdrop-blur-xl hover:shadow-lg hover:border-primary/30 active:scale-95 transition-all duration-200">
             <ArrowLeft className="w-3.5 h-3.5" /> Support Hub
           </button>
