@@ -1,5 +1,21 @@
 const request = require('supertest');
 const mongoose = require('mongoose');
+
+// /auth/login re-verifies staff identity against mws-data-center on every
+// login now (routes/auth.js) - mock it rather than depending on a real
+// Central record existing for this test's fake email.
+jest.mock('../../src/utils/employeeCentralSync', () => ({
+    syncEmployeeFromCentral: jest.fn().mockResolvedValue({
+        name: 'Test User',
+        employeeId: '99.99.001',
+        jobPosition: 'Staff',
+        jobLevel: 'Staff',
+        employmentStatus: 'Permanent',
+        department: 'Operational',
+        unit: 'Operational',
+    }),
+}));
+
 const { app } = require('../../src/app');
 const User = require('../../src/models/User');
 
@@ -20,7 +36,10 @@ describe('Authentication API', () => {
         await User.deleteMany({});
     });
 
-    describe('POST /api/auth/login', () => {
+    // /auth is a sibling top-level mount to /api (see app.js), not nested
+    // under it - and the session lives in an httpOnly cookie set on this
+    // response now (authCookie.js), not a token in the body.
+    describe('POST /auth/login', () => {
         it('should login successfully with valid credentials', async () => {
             // Create test user
             const testUser = {
@@ -33,7 +52,7 @@ describe('Authentication API', () => {
             await User.create(testUser);
 
             const response = await request(app)
-                .post('/api/auth/login')
+                .post('/auth/login')
                 .send({
                     email: testUser.email,
                     password: 'password123'
@@ -42,13 +61,13 @@ describe('Authentication API', () => {
             expect(response.status).toBe(200);
             expect(response.body.success).toBe(true);
             expect(response.body.data).toHaveProperty('user');
-            expect(response.body.data).toHaveProperty('token');
             expect(response.body.data.user.email).toBe(testUser.email);
+            expect(response.headers['set-cookie']).toBeDefined();
         });
 
         it('should return 401 for invalid credentials', async () => {
             const response = await request(app)
-                .post('/api/auth/login')
+                .post('/auth/login')
                 .send({
                     email: 'nonexistent@school.com',
                     password: 'wrongpassword'
@@ -60,7 +79,7 @@ describe('Authentication API', () => {
 
         it('should validate required fields', async () => {
             const response = await request(app)
-                .post('/api/auth/login')
+                .post('/auth/login')
                 .send({});
 
             expect(response.status).toBe(400);
@@ -69,12 +88,15 @@ describe('Authentication API', () => {
         });
     });
 
-    describe('GET /api/auth/me', () => {
-        let token;
+    describe('GET /auth/me', () => {
+        // request.agent keeps the httpOnly cookie from the login response
+        // and resends it automatically on later requests through the same
+        // agent, the same way a real browser session would - there's no
+        // token in the response body anymore to carry over by hand.
+        let agent;
         let testUser;
 
         beforeEach(async () => {
-            // Create and login test user
             testUser = await User.create({
                 email: 'test@school.com',
                 password: 'password123',
@@ -82,20 +104,17 @@ describe('Authentication API', () => {
                 role: 'staff'
             });
 
-            const loginResponse = await request(app)
-                .post('/api/auth/login')
+            agent = request.agent(app);
+            await agent
+                .post('/auth/login')
                 .send({
                     email: 'test@school.com',
                     password: 'password123'
                 });
-
-            token = loginResponse.body.data.token;
         });
 
         it('should return current user profile', async () => {
-            const response = await request(app)
-                .get('/api/auth/me')
-                .set('Authorization', `Bearer ${token}`);
+            const response = await agent.get('/auth/me');
 
             expect(response.status).toBe(200);
             expect(response.body.success).toBe(true);
@@ -104,8 +123,7 @@ describe('Authentication API', () => {
         });
 
         it('should return 401 without token', async () => {
-            const response = await request(app)
-                .get('/api/auth/me');
+            const response = await request(app).get('/auth/me');
 
             expect(response.status).toBe(401);
             expect(response.body.success).toBe(false);

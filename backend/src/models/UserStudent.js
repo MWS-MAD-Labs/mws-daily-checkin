@@ -12,7 +12,11 @@ const studentUserSchema = new mongoose.Schema({
     password: {
         type: String,
         required: function () {
-            return !this.googleId;
+            // Not required for Hub SSO-provisioned accounts (they never set
+            // a local password, or the legacy googleId - Hub owns identity
+            // now) or accounts still carrying the old direct-Google-OAuth
+            // googleId from before that migration.
+            return !this.googleId && !this.ssoProvisioned;
         },
         minlength: 6
     },
@@ -41,6 +45,13 @@ const studentUserSchema = new mongoose.Schema({
     },
     googleProfile: {
         type: Object
+    },
+    // Set by ssoUserResolution.js when this account was created or last
+    // logged in via Hub's SSO relay - exempts it from the password
+    // requirement above, since Hub (not this app) owns the login flow.
+    ssoProvisioned: {
+        type: Boolean,
+        default: false
     },
     username: {
         type: String,
