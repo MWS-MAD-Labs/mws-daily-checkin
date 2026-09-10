@@ -828,7 +828,7 @@ const getDashboardStats = async (req, res) => {
                                 avgCapacity: { $avg: '$capacityLevel' }
                             }
                         }
-                    ]);
+                    ], { allowDiskUse: true });
 
                     const latestMap = new Map();
                     latestCheckins.forEach(entry => {
