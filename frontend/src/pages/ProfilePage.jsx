@@ -1106,11 +1106,16 @@ const ProfilePage = memo(function ProfilePage() {
             const result = await dispatch(logoutUser()).unwrap();
             // If a Hub redirect is already navigating the tab away, don't
             // also push a local route - that races the Hub nav.
-            if (!result?.redirectedToHub) navigate("/");
+            // window.location.assign, not navigate("/") - under this app's
+            // basename, react-router resolves bare "/" to the base path
+            // WITHOUT a trailing slash, which a reload sends straight into
+            // Vite's dev server (or a strict-prefix static host) rejecting
+            // it before the SPA loads. BASE_URL always ends in "/".
+            if (!result?.redirectedToHub) window.location.assign(import.meta.env.BASE_URL);
         } catch (error) {
             console.error('Logout failed:', error);
             // Still navigate to landing page even if logout API fails
-            navigate("/");
+            window.location.assign(import.meta.env.BASE_URL);
         }
     };
 

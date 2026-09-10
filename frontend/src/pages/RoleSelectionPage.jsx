@@ -9,7 +9,7 @@ import {
   getDelegatedDashboardDetails
 } from "@/utils/accessControl";
 import { prefetchStaffFaceScanOnIntent } from "@/utils/faceScanPrefetch";
-import api from "@/services/authService";
+import { getHubBaseUrl } from "@/utils/hubConfig";
 import gsap from "gsap";
 import "@/pages/styles/role-selection-humanistic.css";
 
@@ -20,18 +20,9 @@ const cldJpg = (id, w = 240) => `${CLD}/c_fill,w_${w},h_${Math.round(w * 1.25)},
 const RS_ENABLE_FRAMED_CARDS = true;
 const HUB_SUPPORT_PATH = "/support-hub";
 
-const getHubSupportUrl = async () => {
-  try {
-    const response = await api.get("/config/public", { skipGlobalLoading: true });
-    const hubBaseUrl = String(response?.data?.data?.hubBaseUrl || "").trim().replace(/\/+$/, "");
-    return hubBaseUrl ? `${hubBaseUrl}${HUB_SUPPORT_PATH}` : HUB_SUPPORT_PATH;
-  } catch (_) {
-    return HUB_SUPPORT_PATH;
-  }
-};
-
 const goToHubSupport = async () => {
-  window.location.assign(await getHubSupportUrl());
+  const hubBaseUrl = await getHubBaseUrl();
+  window.location.assign(hubBaseUrl ? `${hubBaseUrl}${HUB_SUPPORT_PATH}` : HUB_SUPPORT_PATH);
 };
 
 const supportsFinePointer = () => {

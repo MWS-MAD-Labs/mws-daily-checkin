@@ -21,6 +21,28 @@ const API_BASE_URL = `${GATEWAY_BASE}/api/v1`;
 // to the backend, but the backend has no such route and 404s.
 const AUTH_BASE_URL = GATEWAY_BASE;
 
+// Set right before logout()'s own window.location.assign(hubLogoutUrl)
+// below, so the 401 interceptor further down can tell a Hub redirect is
+// already in flight. Without this, any OTHER in-flight request (a
+// notification poller, a background refetch, anything else on the page
+// making an API call around the same moment) sees its cookie already
+// cleared server-side, 401s, and the interceptor's own
+// window.location.assign(BASE_URL) below can win the race against the
+// logout's cross-origin navigate - landing the user back on this app's own
+// landing page instead of Hub, depending on which network response comes
+// back first.
+let hubRedirectInFlight = false;
+
+// Exported so useSilentHubRelogin can check it too - that hook's own hidden
+// iframe attempt fires the instant Redux flips isAuthenticated to false,
+// which can be BEFORE this app's own cross-origin window.location.assign
+// to Hub has actually landed (Hub's session cookie is still valid on
+// Hub's side until the navigate completes). Left unguarded, the iframe's
+// silent relogin can succeed mid-navigate and undo the logout entirely -
+// useCrossTabAuthSync picks up its localStorage write and routes this tab
+// straight back to a logged-in page before the browser ever reaches Hub.
+export const isHubRedirectInFlight = () => hubRedirectInFlight;
+
 // Create axios instance with default config
 const api = axios.create({
     baseURL: API_BASE_URL,
@@ -92,8 +114,15 @@ api.interceptors.response.use(
                     // production (vite.config.js), '/' in standalone local
                     // dev - this bypasses React Router, so it needs the
                     // prefix added explicitly rather than getting it from a
-                    // basename.
-                    if (typeof window !== 'undefined' && window.location.pathname !== import.meta.env.BASE_URL) {
+                    // basename. Skipped entirely while a Hub redirect is
+                    // already underway (see hubRedirectInFlight above) - this
+                    // would otherwise race it and can win, landing the user
+                    // back here instead of at Hub.
+                    if (
+                        !hubRedirectInFlight &&
+                        typeof window !== 'undefined' &&
+                        window.location.pathname !== import.meta.env.BASE_URL
+                    ) {
                         window.location.assign(import.meta.env.BASE_URL);
                     }
                 }
@@ -110,7 +139,23 @@ export const login = async (email, password) => {
 };
 
 export const logout = async () => {
-    const response = await api.post('/auth/logout', undefined, { baseURL: AUTH_BASE_URL });
+    // Set before the request even fires: the backend clears this app's
+    // cookie as part of handling it, so another in-flight request can 401
+    // and race the interceptor above against this function's own
+    // window.location.assign below starting from that moment, not just
+    // after this response comes back.
+    hubRedirectInFlight = true;
+
+    let response;
+    try {
+        response = await api.post('/auth/logout', undefined, { baseURL: AUTH_BASE_URL });
+    } catch (error) {
+        // The request itself failed - nothing is navigating away, so don't
+        // leave the interceptor permanently suppressed for the rest of the
+        // session.
+        hubRedirectInFlight = false;
+        throw error;
+    }
 
     clearStoredAuthSession();
 
@@ -126,6 +171,9 @@ export const logout = async () => {
         return { redirectedToHub: true };
     }
 
+    // No hubLogoutUrl - nothing is actually navigating away, so let the
+    // interceptor resume its normal behavior for any future 401.
+    hubRedirectInFlight = false;
     return { redirectedToHub: false };
 };
 

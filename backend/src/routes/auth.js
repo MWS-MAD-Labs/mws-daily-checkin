@@ -190,15 +190,14 @@ router.post('/logout', (req, res) => {
     // clear it - no server-to-server call can. We hand the client a URL to
     // navigate to instead of trying to do it from here.
     const hubBaseUrl = process.env.HUB_BASE_URL;
-    // Same FRONTEND_URL fallback as the /sso relay above - keep both in sync
-    // so a missing env var doesn't send local dev logout to production.
-    // Trailing slash is mandatory here: unlike /sso (which always appends a
-    // path after frontendUrl), this IS the final landing URL, and Vite's dev
-    // server 404s a request for exactly its base path without the slash
-    // (e.g. /daily-checkin vs /daily-checkin/).
-    const hubBaseTarget = `${(process.env.FRONTEND_URL || 'http://localhost:5174/daily-checkin').replace(/\/$/, '')}/`;
+    // No redirect param: Hub's own /auth/logout falls back to Hub's own
+    // front page when none is given (mws-hub's resolveLogoutRedirect always
+    // allows Hub's own origin, and treats a missing/invalid redirect as
+    // "land on Hub itself"). Apps no longer have their own login screen as
+    // the real entry point - Hub is - so logging out here should land the
+    // user back at Hub, not bounce them into this app's own login form.
     const hubLogoutUrl = hubBaseUrl
-        ? `${hubBaseUrl.replace(/\/$/, '')}/auth/logout?redirect=${encodeURIComponent(hubBaseTarget)}`
+        ? `${hubBaseUrl.replace(/\/$/, '')}/auth/logout`
         : null;
 
     sendSuccess(res, 'Logged out successfully', hubLogoutUrl ? { hubLogoutUrl } : null);

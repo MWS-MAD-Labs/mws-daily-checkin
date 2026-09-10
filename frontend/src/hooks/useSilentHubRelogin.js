@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useSelector } from 'react-redux';
+import { getHubBaseUrl } from '@/utils/hubConfig';
+import { isHubRedirectInFlight } from '@/services/authService';
 
 const ATTEMPT_TIMEOUT_MS = 5000;
 
@@ -28,26 +30,65 @@ const ATTEMPT_TIMEOUT_MS = 5000;
 export function useSilentHubRelogin() {
     const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
     const attemptedRef = useRef(false);
+    // The setTimeout below closes over whatever isAuthenticated was at
+    // effect-run time - this ref is how it reads the up-to-date value 5s
+    // later instead of a stale one, without re-running the effect (and
+    // firing a second iframe) every time auth state changes.
+    const isAuthenticatedRef = useRef(isAuthenticated);
+
+    useEffect(() => {
+        isAuthenticatedRef.current = isAuthenticated;
+    }, [isAuthenticated]);
 
     useEffect(() => {
         if (isAuthenticated || attemptedRef.current) return;
+        // An explicit logout already has a real, cross-origin navigate to
+        // Hub underway (authService.js's logout()) - that hasn't landed
+        // yet the instant isAuthenticated flips to false (this effect's own
+        // trigger), so Hub's session cookie can still be valid for a brief
+        // window. Starting this attempt here can silently re-authenticate
+        // through it and undo the logout entirely before the browser ever
+        // reaches Hub - trust the in-flight navigate instead of racing it.
+        if (isHubRedirectInFlight()) return;
         attemptedRef.current = true;
 
-        const hubBaseUrl = import.meta.env.VITE_HUB_BASE_URL || 'http://localhost:5175';
+        let cancelled = false;
 
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        iframe.setAttribute('aria-hidden', 'true');
-        iframe.src = `${hubBaseUrl.replace(/\/$/, '')}/apps/daily-checkin/launch`;
-        document.body.appendChild(iframe);
+        getHubBaseUrl().then((hubBaseUrl) => {
+            if (cancelled) return;
 
-        // Deliberately no cleanup function here: React 18 StrictMode's dev-
-        // only mount -> cleanup -> mount-again cycle would otherwise remove
-        // this iframe (aborting its in-flight, multi-hop redirect) moments
-        // after starting it - attemptedRef above is what actually stops the
-        // StrictMode remount from double-attempting, not this. This is a
-        // fire-and-forget background check; the component unmounting early
-        // doesn't need to cancel it, so its lifetime is just the timeout.
-        setTimeout(() => iframe.remove(), ATTEMPT_TIMEOUT_MS);
+            const resolvedHubBaseUrl = hubBaseUrl || 'http://localhost:5175';
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.setAttribute('aria-hidden', 'true');
+            iframe.src = `${resolvedHubBaseUrl}/apps/daily-checkin/launch`;
+            document.body.appendChild(iframe);
+
+            // Deliberately no cleanup function here: React 18 StrictMode's dev-
+            // only mount -> cleanup -> mount-again cycle would otherwise remove
+            // this iframe (aborting its in-flight, multi-hop redirect) moments
+            // after starting it - attemptedRef above is what actually stops the
+            // StrictMode remount from double-attempting, not this. This is a
+            // fire-and-forget background check; the component unmounting early
+            // doesn't need to cancel it, so its lifetime is just the timeout.
+            setTimeout(() => {
+                iframe.remove();
+                // Silent recovery didn't restore a session - either Hub
+                // itself is also signed out, or its cookie wasn't reachable
+                // at all. There's no login screen of this app's own to fall
+                // back to anymore (see HeroSection/HeroAuthCard) - Hub is
+                // the only place sign-in happens now, so send the browser
+                // there for real instead of leaving the visitor stranded on
+                // a landing page with nothing to do but click through
+                // manually.
+                if (!isAuthenticatedRef.current) {
+                    window.location.href = resolvedHubBaseUrl;
+                }
+            }, ATTEMPT_TIMEOUT_MS);
+        });
+
+        return () => {
+            cancelled = true;
+        };
     }, [isAuthenticated]);
 }
