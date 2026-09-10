@@ -128,7 +128,15 @@ async function syncEmployeeRoster() {
 
         Object.assign(user, nextFields);
         user.updatedAt = new Date();
-        await user.save();
+        try {
+            // validateModifiedOnly - a legacy value in a field this job
+            // never touches shouldn't block these changes, or (with no
+            // per-record guard) abort every remaining candidate in this run.
+            await user.save({ validateModifiedOnly: true });
+        } catch (error) {
+            winston.error(`employeeRosterSync: failed to save ${user.email}: ${error.message}`);
+            continue;
+        }
 
         if (employee) {
             updated += 1;
