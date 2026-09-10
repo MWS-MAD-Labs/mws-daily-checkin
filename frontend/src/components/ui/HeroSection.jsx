@@ -18,17 +18,15 @@ const TRUST = [
   { icon: Smartphone, text: 'PWA Ready' },
 ];
 
-// Codes set by backend redirects (auth.js /google/callback, AuthCallback.jsx)
-// after a failed login - none of these were surfaced to the user before,
-// they just landed back here silently.
+// Codes set by backend redirects (auth.js's /auth/sso Hub relay handoff) -
+// none of these were surfaced to the user before, they just landed back
+// here silently.
 const OAUTH_ERROR_MESSAGES = {
-  central_inactive: 'Your account is inactive in the central database. Contact an administrator.',
-  central_lookup_failed: "Couldn't verify your account with the central database. Please try again shortly.",
+  sso_missing_token: 'Sign-in link was missing its token. Please try again from Hub.',
+  sso_invalid_token: 'Sign-in link was invalid or expired. Please try again from Hub.',
   account_inactive: 'Your account has been deactivated. Contact an administrator.',
-  user_not_found: "We couldn't find your account. Contact an administrator.",
-  missing_data: 'Sign-in response was incomplete. Please try again.',
-  missing_role: 'Your account has no role assigned. Contact an administrator.',
-  callback_failed: 'Sign-in failed while completing the redirect. Please try again.',
+  sso_central_lookup_failed: "Couldn't verify your account with the central database. Please try again shortly.",
+  sso_failed: 'Sign-in failed while completing the handoff. Please try again.',
 };
 
 const HeroSection = memo(() => {
