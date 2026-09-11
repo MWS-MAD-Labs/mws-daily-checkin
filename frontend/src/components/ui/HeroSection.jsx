@@ -1,9 +1,14 @@
-import { memo, useCallback, useEffect } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
+import { useDispatch } from "react-redux";
+import { useNavigate } from "react-router-dom";
 import { useToast } from "../ui/use-toast";
 import HeroAuthCard from "@/components/ui/HeroAuthCard";
 import Logo from "./Millennia.webp";
 import { Sparkles, ShieldCheck, Smartphone } from "lucide-react";
 import { getHubBaseUrl } from "@/utils/hubConfig";
+import { attemptSilentHubLogin } from "@/utils/hubSilentLogin";
+import { fetchCurrentUser } from "@/store/slices/authSlice";
+import { consumePendingRedirect, getDefaultPostLoginPath } from "@/utils/authRedirect";
 
 const FEATURES = [
   { icon: '🧠', label: 'AI Emotional Wellness' },
@@ -31,6 +36,9 @@ const OAUTH_ERROR_MESSAGES = {
 
 const HeroSection = memo(() => {
   const { toast } = useToast();
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const [isCheckingHub, setIsCheckingHub] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -53,8 +61,44 @@ const HeroSection = memo(() => {
     // itself and relays a signed token here, rather than this app running
     // its own separate Google OAuth flow.
     const hubBaseUrl = await getHubBaseUrl();
-    window.location.href = `${hubBaseUrl || "http://localhost:5175"}/apps/daily-checkin/launch`;
-  }, []);
+    const resolvedHubBaseUrl = hubBaseUrl || "http://localhost:5175";
+
+    // Try a silent relogin first (hidden iframe through the same relay a
+    // visible click-through uses) - if Hub's own session is still valid,
+    // this logs the user in without ever bouncing them to Hub's login
+    // screen. Only falls through to the full redirect when Hub genuinely
+    // has no session of its own to hand back.
+    setIsCheckingHub(true);
+    try {
+      const result = await attemptSilentHubLogin(resolvedHubBaseUrl, "daily-checkin");
+
+      if (result.status === "success") {
+        const action = await dispatch(fetchCurrentUser());
+        if (fetchCurrentUser.fulfilled.match(action)) {
+          const userData = action.payload?.user || action.payload?.data?.user;
+          const pendingRedirect = consumePendingRedirect();
+          navigate(pendingRedirect || getDefaultPostLoginPath(userData), { replace: true });
+          return;
+        }
+        // Success signal fired but /auth/me still disagrees - fall through
+        // to the full redirect below, same as a timeout.
+      } else if (result.status === "error") {
+        // Hub is logged in but refused this launch for a specific reason
+        // (no access, maintenance, etc) - show that here instead of
+        // bouncing to Hub's own tab just to display the same message there.
+        toast({
+          title: result.title,
+          description: result.description,
+          variant: "destructive",
+        });
+        return;
+      }
+    } finally {
+      setIsCheckingHub(false);
+    }
+
+    window.location.href = `${resolvedHubBaseUrl}/apps/daily-checkin/launch`;
+  }, [dispatch, navigate, toast]);
 
   return (
     <section className="landing-pointer-shell relative min-h-screen flex items-center justify-center px-4 py-10 md:py-16">
@@ -107,7 +151,7 @@ const HeroSection = memo(() => {
         {/* Right — Auth Card */}
         <div className="landing-gsap-card flex justify-center lg:justify-end" data-landing-depth="10">
           <div className="w-full max-w-md">
-            <HeroAuthCard onGoogleSignIn={handleGoogleSignIn} />
+            <HeroAuthCard onGoogleSignIn={handleGoogleSignIn} isCheckingHub={isCheckingHub} />
           </div>
         </div>
       </div>

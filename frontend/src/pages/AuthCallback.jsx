@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { loginSuccess } from '../store/slices/authSlice';
@@ -9,8 +9,17 @@ import { setStoredAuthSession } from '@/utils/authStorage';
 const AuthCallback = () => {
     const navigate = useNavigate();
     const dispatch = useDispatch();
+    const ranRef = useRef(false);
 
     useEffect(() => {
+        // React.StrictMode (dev only) double-invokes effects. This one reads
+        // the #user= hash then strips it via replaceState - a second run
+        // reads back an already-cleared hash and misreports missing_data,
+        // even though the first run's login already succeeded. Guard so
+        // only the first invocation actually runs.
+        if (ranRef.current) return;
+        ranRef.current = true;
+
         const handleCallback = async () => {
             try {
                 // No token here anymore - the backend already set it as an
@@ -38,6 +47,16 @@ const AuthCallback = () => {
 
                 setStoredAuthSession({ user: canonicalUser });
                 dispatch(loginSuccess({ user: canonicalUser }));
+
+                // Running inside a hidden iframe (a silent Hub relogin
+                // attempt - see utils/hubSilentLogin.js) means the parent
+                // tab is waiting to hear whether this landed. Its own
+                // navigate() below only affects this iframe's own history,
+                // invisible to the parent, so tell it directly instead of
+                // making it guess via a timeout.
+                if (window.parent !== window) {
+                    window.parent.postMessage({ type: 'MWS_HUB_SILENT_LOGIN_SUCCESS' }, window.location.origin);
+                }
 
                 const redirectParam = hashParams.get('redirect');
                 const safeRedirect = sanitizeRedirectPath(redirectParam);

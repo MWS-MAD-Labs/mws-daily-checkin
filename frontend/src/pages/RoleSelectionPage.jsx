@@ -19,10 +19,31 @@ const cld = (id, w = 300) => `${CLD}/c_scale,w_${w},f_auto,q_auto/${id}.png`;
 const cldJpg = (id, w = 240) => `${CLD}/c_fill,w_${w},h_${Math.round(w * 1.25)},g_face,f_auto,q_auto/${id}.jpg`;
 const RS_ENABLE_FRAMED_CARDS = true;
 const HUB_SUPPORT_PATH = "/support-hub";
+// Shared literally with MTSS's own RoleSelectionPage.jsx - naming the
+// target the same in both apps means a Hub tab either one opens gets
+// reused/focused by the other too, not just by repeated clicks in one app.
+const HUB_SUPPORT_WINDOW_NAME = "mws-hub-support";
 
-const goToHubSupport = async () => {
-  const hubBaseUrl = await getHubBaseUrl();
-  window.location.assign(hubBaseUrl ? `${hubBaseUrl}${HUB_SUPPORT_PATH}` : HUB_SUPPORT_PATH);
+const goToHubSupport = () => {
+  // Opened synchronously, still inside the click's own event handler and
+  // before any await - a window.open() called after an await loses the
+  // "trusted user gesture" most browsers require and gets popup-blocked.
+  // An empty URL with this name also reuses/focuses an already-open Hub
+  // tab (window.open("", name) semantics), same trick Hub's own AppCard.tsx
+  // uses for the opposite direction.
+  const target = window.open("", HUB_SUPPORT_WINDOW_NAME);
+
+  getHubBaseUrl().then((hubBaseUrl) => {
+    const url = hubBaseUrl ? `${hubBaseUrl}${HUB_SUPPORT_PATH}` : HUB_SUPPORT_PATH;
+    if (target) {
+      target.location.href = url;
+    } else {
+      // Popup blocked despite the synchronous open (some browsers are
+      // stricter still) - fall back to the previous same-tab behavior
+      // rather than silently doing nothing.
+      window.location.assign(url);
+    }
+  });
 };
 
 const supportsFinePointer = () => {
