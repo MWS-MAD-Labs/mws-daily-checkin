@@ -33,10 +33,29 @@ const goToHubSupport = () => {
   // uses for the opposite direction.
   const target = window.open("", HUB_SUPPORT_WINDOW_NAME);
 
+  // Checked synchronously, right after the open above - by the time
+  // getHubBaseUrl() resolves below, a reused tab may have already started
+  // navigating, so this can't wait until then.
+  let isFreshWindow = true;
+  if (target) {
+    try {
+      isFreshWindow = target.location.href === "about:blank" || target.location.href === "";
+    } catch {
+      // Cross-origin already (it navigated to Hub in an earlier click) -
+      // not fresh, and not readable from here either way.
+      isFreshWindow = false;
+    }
+  }
+
   getHubBaseUrl().then((hubBaseUrl) => {
     const url = hubBaseUrl ? `${hubBaseUrl}${HUB_SUPPORT_PATH}` : HUB_SUPPORT_PATH;
-    if (target) {
+    if (target && isFreshWindow) {
       target.location.href = url;
+    } else if (target) {
+      // Already open on Hub somewhere - just bring it to front instead of
+      // reloading it to the exact same page, which reads as a jarring
+      // reload even when nothing actually changed.
+      target.focus();
     } else {
       // Popup blocked despite the synchronous open (some browsers are
       // stricter still) - fall back to the previous same-tab behavior

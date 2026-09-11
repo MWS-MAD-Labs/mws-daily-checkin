@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const helmet = require('helmet');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
@@ -69,7 +70,7 @@ router.get('/sso', helmet.crossOriginOpenerPolicy({ policy: 'unsafe-none' }), ss
         }
 
         const sessionToken = jwt.sign(
-            { userId: dbUser._id, email: dbUser.email, role: dbUser.role },
+            { userId: dbUser._id, email: dbUser.email, role: dbUser.role, sessionVersion: dbUser.sessionVersion || 0 },
             process.env.JWT_SECRET,
             { expiresIn: process.env.JWT_EXPIRES_IN || '1d' }
         );
@@ -161,7 +162,8 @@ router.post('/login', require('../middleware/validation').validate(require('../u
             {
                 userId: user._id,
                 email: user.email,
-                role: user.role
+                role: user.role,
+                sessionVersion: user.sessionVersion || 0
             },
             process.env.JWT_SECRET,
             { expiresIn: process.env.JWT_EXPIRES_IN || '1d' }
@@ -224,6 +226,43 @@ router.get('/logout-silent', (req, res) => {
     res.type('html').send(
         `<!doctype html><html><body><script>try{localStorage.removeItem('daily.auth_token');localStorage.removeItem('daily.auth_user');sessionStorage.removeItem('daily.auth_token');sessionStorage.removeItem('daily.auth_user');}catch(e){}</script></body></html>`
     );
+});
+
+// Constant-time secret compare - avoids leaking how many leading bytes of
+// HUB_INTERNAL_SECRET a guess got right via response-time differences.
+const safeSecretEqual = (a, b) => {
+    const bufA = Buffer.from(String(a || ''));
+    const bufB = Buffer.from(String(b || ''));
+    if (bufA.length !== bufB.length) return false;
+    return crypto.timingSafeEqual(bufA, bufB);
+};
+
+// Back-channel session revocation. Hub calls this directly (server-to-
+// server, not through the user's browser) when signing someone out
+// anywhere - the fan-out iframe (/auth/logout-silent above) depends on the
+// browser actually loading it and third-party cookies not being blocked,
+// neither of which is guaranteed; this bumps sessionVersion instead, which
+// invalidates every already-issued JWT for that email the next time
+// middleware/auth.js's authenticate checks it, regardless of whether the
+// browser ever visits this app again.
+router.post('/revoke-session', async (req, res) => {
+    const providedSecret = req.headers['x-hub-internal-secret'];
+    const expectedSecret = process.env.HUB_INTERNAL_SECRET;
+    if (!expectedSecret || !safeSecretEqual(providedSecret, expectedSecret)) {
+        return sendError(res, 'Unauthorized', 401);
+    }
+
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (!email) {
+        return sendError(res, 'email is required', 400);
+    }
+
+    await Promise.all([
+        User.updateOne({ email }, { $inc: { sessionVersion: 1 } }),
+        UserStudent.updateOne({ email }, { $inc: { sessionVersion: 1 } })
+    ]);
+
+    sendSuccess(res, 'Session revoked');
 });
 
 // Get current user info
