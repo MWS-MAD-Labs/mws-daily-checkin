@@ -91,7 +91,8 @@ const SupportHubPhotoLayer = memo(() => {
           src={cutoutLeftSrc}
           alt=""
           loading="eager"
-          fetchPriority="high"
+          // eslint-disable-next-line react/no-unknown-property -- react-dom 18 doesn't map camelCase fetchPriority yet; lowercase is what actually reaches the DOM
+          fetchpriority="high"
           decoding="async"
           className={leftLoaded ? "lm-img--loaded" : ""}
           onLoad={() => setLeftLoaded(true)}
@@ -104,7 +105,8 @@ const SupportHubPhotoLayer = memo(() => {
           src={cutoutRightSrc}
           alt=""
           loading="eager"
-          fetchPriority="high"
+          // eslint-disable-next-line react/no-unknown-property -- react-dom 18 doesn't map camelCase fetchPriority yet; lowercase is what actually reaches the DOM
+          fetchpriority="high"
           decoding="async"
           className={rightLoaded ? "lm-img--loaded" : ""}
           onLoad={() => setRightLoaded(true)}

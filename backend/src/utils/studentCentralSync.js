@@ -5,7 +5,7 @@ const { buildStudentUserPayload } = require('./studentUserHelpers');
 // the email has no active student record there (caller should treat this
 // account as not-a-student, e.g. fall through to the employee check).
 // mws-data-center's /students/lookup only ever returns ACTIVE students, so
-// there's no status other than "active" to map here.
+// there's no status other than "ACTIVE" to map here.
 async function syncStudentFromCentral(email) {
     const centralStudent = await lookupStudentByEmail(email);
     if (!centralStudent) return null;
@@ -14,6 +14,7 @@ async function syncStudentFromCentral(email) {
         email: centralStudent.email,
         name: centralStudent.full_name,
         nickname: centralStudent.nick_name,
+        gender: centralStudent.gender,
         status: centralStudent.status,
         currentGrade: centralStudent.current_grade,
         className: centralStudent.current_class,

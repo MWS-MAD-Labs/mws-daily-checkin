@@ -1709,8 +1709,8 @@ const convertExtendedJsonValue = (input) => {
 const normalizeUserDocument = (doc = {}) => {
     const normalized = convertExtendedJsonValue(doc);
 
-    if (normalized.gender === 'M') normalized.gender = 'male';
-    if (normalized.gender === 'F') normalized.gender = 'female';
+    if (normalized.gender === 'M') normalized.gender = 'MALE';
+    if (normalized.gender === 'F') normalized.gender = 'FEMALE';
 
     if (Array.isArray(normalized.classes) && normalized.classes.length === 0) {
         delete normalized.classes;

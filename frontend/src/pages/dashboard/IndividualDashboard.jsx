@@ -104,7 +104,7 @@ const IndividualDashboard = memo(() => {
 
     const getUserTitle = (user) => {
         if (!user?.gender) return user?.name || 'User';
-        const title = user.gender === 'male' ? 'Mr.' : user.gender === 'female' ? 'Ms.' : '';
+        const title = user.gender === 'MALE' ? 'Mr.' : user.gender === 'FEMALE' ? 'Ms.' : '';
         const displayName = user.username || user.name || 'User';
         return title ? `${title} ${displayName}` : displayName;
     };

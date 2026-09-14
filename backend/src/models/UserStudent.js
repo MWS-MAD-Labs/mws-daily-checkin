@@ -69,16 +69,17 @@ const studentUserSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
+    // Central's exact Gender enum (mws-data-center/server/prisma/schema.prisma)
+    // - no local "other" sentinel, Central itself only has MALE/FEMALE.
     gender: {
         type: String,
-        enum: ['male', 'female', 'other'],
-        default: 'other',
+        enum: ['MALE', 'FEMALE'],
         trim: true
     },
+    // Central's exact StudentStatus enum - stored as-is, no local narrowing.
     status: {
         type: String,
-        enum: ['active', 'inactive', 'graduated', 'transferred', 'pending'],
-        default: 'active',
+        enum: ['REGISTERED', 'ACTIVE', 'INACTIVE', 'GRADUATED', 'TRANSFERRED', 'WITHDRAWN', 'ARCHIVED'],
         trim: true
     },
     currentGrade: {

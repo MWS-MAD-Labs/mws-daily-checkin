@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Heart, Brain, Sparkles, ArrowRight, BarChart3, ArrowLeft, Shield } from "lucide-react";
+import { Heart, Brain, Sparkles, ArrowRight, BarChart3, Shield } from "lucide-react";
 import { useSelector } from "react-redux";
 import {
   hasEmotionalDashboardAccess,
@@ -9,7 +9,6 @@ import {
   getDelegatedDashboardDetails
 } from "@/utils/accessControl";
 import { prefetchStaffFaceScanOnIntent } from "@/utils/faceScanPrefetch";
-import { getHubBaseUrl } from "@/utils/hubConfig";
 import gsap from "gsap";
 import "@/pages/styles/role-selection-humanistic.css";
 
@@ -18,52 +17,6 @@ const CLD = "https://res.cloudinary.com/deldcwiji/image/upload";
 const cld = (id, w = 300) => `${CLD}/c_scale,w_${w},f_auto,q_auto/${id}.png`;
 const cldJpg = (id, w = 240) => `${CLD}/c_fill,w_${w},h_${Math.round(w * 1.25)},g_face,f_auto,q_auto/${id}.jpg`;
 const RS_ENABLE_FRAMED_CARDS = true;
-const HUB_SUPPORT_PATH = "/support-hub";
-// Shared literally with MTSS's own RoleSelectionPage.jsx - naming the
-// target the same in both apps means a Hub tab either one opens gets
-// reused/focused by the other too, not just by repeated clicks in one app.
-const HUB_SUPPORT_WINDOW_NAME = "mws-hub-support";
-
-const goToHubSupport = () => {
-  // Opened synchronously, still inside the click's own event handler and
-  // before any await - a window.open() called after an await loses the
-  // "trusted user gesture" most browsers require and gets popup-blocked.
-  // An empty URL with this name also reuses/focuses an already-open Hub
-  // tab (window.open("", name) semantics), same trick Hub's own AppCard.tsx
-  // uses for the opposite direction.
-  const target = window.open("", HUB_SUPPORT_WINDOW_NAME);
-
-  // Checked synchronously, right after the open above - by the time
-  // getHubBaseUrl() resolves below, a reused tab may have already started
-  // navigating, so this can't wait until then.
-  let isFreshWindow = true;
-  if (target) {
-    try {
-      isFreshWindow = target.location.href === "about:blank" || target.location.href === "";
-    } catch {
-      // Cross-origin already (it navigated to Hub in an earlier click) -
-      // not fresh, and not readable from here either way.
-      isFreshWindow = false;
-    }
-  }
-
-  getHubBaseUrl().then((hubBaseUrl) => {
-    const url = hubBaseUrl ? `${hubBaseUrl}${HUB_SUPPORT_PATH}` : HUB_SUPPORT_PATH;
-    if (target && isFreshWindow) {
-      target.location.href = url;
-    } else if (target) {
-      // Already open on Hub somewhere - just bring it to front instead of
-      // reloading it to the exact same page, which reads as a jarring
-      // reload even when nothing actually changed.
-      target.focus();
-    } else {
-      // Popup blocked despite the synchronous open (some browsers are
-      // stricter still) - fall back to the previous same-tab behavior
-      // rather than silently doing nothing.
-      window.location.assign(url);
-    }
-  });
-};
 
 const supportsFinePointer = () => {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
@@ -475,9 +428,6 @@ const RoleSelection = memo(() => {
 
   const isTeacherRole = user && ['teacher', 'se_teacher'].includes(user.role);
   const isPrincipalRole = user && ['head_unit', 'directorate', 'admin', 'superadmin'].includes(user.role);
-  const supportHubRoles = ['staff', 'support_staff', 'nurse', 'counselor', 'teacher', 'se_teacher', 'head_unit', 'principal', 'directorate', 'admin', 'superadmin'];
-  const normalizedUserRole = String(user?.role || '').trim().toLowerCase();
-  const hasSupportHubAccess = user && supportHubRoles.includes(normalizedUserRole);
   const studentDashboardFeatures = isPrincipalRole
     ? ["Student emotional overview by grade and class", "Needs-support spotlight for faster follow up", "Unit-aligned scope for each principal", "Quick search and daily refresh monitoring"]
     : ["Class-scoped student check-ins", "Daily submission tracking", "Needs support highlights", "Quick search by student"];
@@ -498,16 +448,6 @@ const RoleSelection = memo(() => {
         <div className="absolute bottom-0 right-0 w-72 h-72 bg-primary/[0.04] rounded-full blur-3xl" style={{ animation: 'rs-blob 10s ease-in-out 1s infinite' }} />
         <div className="rs-grid-overlay" />
       </div>
-
-      {/* Back button — only shown for roles with Support Hub access */}
-      {hasSupportHubAccess && (
-        <div className="absolute top-4 left-4 sm:top-6 sm:left-6 md:top-4 md:left-[130px] z-30">
-          <button onClick={goToHubSupport}
-            className="rs-back-btn inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold text-primary bg-card/80 border border-border/40 shadow-md backdrop-blur-xl hover:shadow-lg hover:border-primary/30 active:scale-95 transition-all duration-200">
-            <ArrowLeft className="w-3.5 h-3.5" /> Support Hub
-          </button>
-        </div>
-      )}
 
       {/* Content */}
       <div className="rs-pointer-shell relative z-10 min-h-screen flex items-center justify-center p-4 sm:p-6">
@@ -561,13 +501,6 @@ const RoleSelection = memo(() => {
                 title={effectiveDashboardRole === 'head_unit' ? "Unit Dashboard" : "Emotional Checkin Dashboard"}
                 desc={dashboardDescription} features={dashboardFeatures}
                 isPremium={false} onClick={() => selectMethod('dashboard')} delay={0.6} />
-            )}
-
-            {user && user.role && !canAccessDashboard && (
-              <div className="rounded-xl border border-border/30 bg-card/40  p-3 text-center" style={{ animation: 'rs-card-in 0.5s ease-out 0.65s both' }}>
-                <p className="text-[10px] text-muted-foreground"></p>
-                <p className="text-[9px] text-muted-foreground/60 mt-0.5"></p>
-              </div>
             )}
 
             {(user && ['directorate', 'admin', 'superadmin'].includes(user.role)) && (

@@ -70,10 +70,10 @@ export function isSelectedContact(contact, supportContact) {
 
 export function getDisplayName(contact) {
     const name = contact.displayName || contact.preferredName || contact.name || "";
-    if (contact.gender === "female" && !name.startsWith("Ms.") && !name.startsWith("Mrs.")) {
+    if (contact.gender === "FEMALE" && !name.startsWith("Ms.") && !name.startsWith("Mrs.")) {
         return `Ms. ${name.split(" ")[0]}`;
     }
-    if (contact.gender === "male" && !name.startsWith("Mr.")) {
+    if (contact.gender === "MALE" && !name.startsWith("Mr.")) {
         return `Mr. ${name.split(" ")[0]}`;
     }
     return name;

@@ -134,6 +134,7 @@ module.exports = {
   lookupEmployeeByEmail,
   lookupEmployeeByEmployeeId,
   listActiveEmployees,
+  listStudentsByStatus,
   lookupStudentByEmail,
   getStudentSupportContacts,
   listClassTeacherAssignments,

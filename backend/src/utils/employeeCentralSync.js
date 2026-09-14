@@ -6,6 +6,7 @@ function mapCentralEmployee(centralEmployee) {
     return {
         name: centralEmployee.full_name,
         email: centralEmployee.email,
+        gender: centralEmployee.gender,
         employeeId: centralEmployee.employee_id,
         jobPosition: centralEmployee.job_position,
         jobLevel: centralEmployee.job_level,

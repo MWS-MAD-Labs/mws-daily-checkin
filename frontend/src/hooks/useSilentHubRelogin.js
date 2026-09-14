@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useSelector } from 'react-redux';
+import { useLocation } from 'react-router-dom';
 import { getHubBaseUrl } from '@/utils/hubConfig';
 import { isHubRedirectInFlight } from '@/services/authService';
 
@@ -29,10 +30,25 @@ const ATTEMPT_TIMEOUT_MS = 5000;
 // harmless no-op.
 export function useSilentHubRelogin() {
     const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
+    const location = useLocation();
     const attemptedRef = useRef(false);
 
+    // A real SSO login lands on this very tab at /auth/callback with
+    // isAuthenticated still false (AuthCallback's own effect dispatches
+    // loginSuccess from the same render this hook's effect closure was
+    // captured from, so it can't see that dispatch yet). Starting a
+    // second, hidden-iframe SSO round-trip on top of the real one races
+    // it: both write the same localStorage auth keys, and the iframe's own
+    // /auth/callback landing can fire a storage event the visible tab's
+    // useCrossTabAuthSync reacts to with a stale isAuthenticated read of
+    // its own, navigating the visible tab somewhere the real login never
+    // asked for. Not depending on attemptedRef so a genuinely failed
+    // callback that lands back on a different, still-unauthenticated route
+    // still gets the normal silent-recovery attempt afterward.
+    const onAuthCallbackRoute = location.pathname.endsWith('/auth/callback');
+
     useEffect(() => {
-        if (isAuthenticated || attemptedRef.current) return;
+        if (isAuthenticated || attemptedRef.current || onAuthCallbackRoute) return;
         // An explicit logout already has a real, cross-origin navigate to
         // Hub underway (authService.js's logout()) - that hasn't landed
         // yet the instant isAuthenticated flips to false (this effect's own
@@ -78,5 +94,5 @@ export function useSilentHubRelogin() {
         return () => {
             cancelled = true;
         };
-    }, [isAuthenticated]);
+    }, [isAuthenticated, onAuthCallbackRoute]);
 }

@@ -108,7 +108,8 @@ const HeroSection = memo(() => {
           <div className="landing-gsap-logo inline-block" data-landing-depth="12">
             <div className="relative w-20 h-20 md:w-28 md:h-28 rounded-2xl md:rounded-3xl bg-gradient-to-br from-primary via-gold to-gold p-[2px] shadow-2xl">
               <div className="w-full h-full rounded-2xl md:rounded-3xl bg-card flex items-center justify-center overflow-hidden">
-                <img src={Logo} alt="Millennia Logo" className="w-24 h-24 md:w-32 md:h-32 object-contain" loading="eager" fetchPriority="high" />
+                {/* eslint-disable-next-line react/no-unknown-property -- react-dom 18 doesn't map camelCase fetchPriority yet; lowercase is what actually reaches the DOM */}
+                <img src={Logo} alt="Millennia Logo" className="w-24 h-24 md:w-32 md:h-32 object-contain" loading="eager" fetchpriority="high" />
               </div>
               <div className="absolute -inset-1 rounded-2xl md:rounded-3xl bg-gradient-to-br from-primary/30 via-gold/20 to-transparent blur-lg -z-10 animate-pulse" />
             </div>

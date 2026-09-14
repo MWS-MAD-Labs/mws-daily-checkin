@@ -125,9 +125,11 @@ const userSchema = new mongoose.Schema({
     lastLogin: {
         type: Date
     },
+    // Central's exact Gender enum (mws-data-center/server/prisma/schema.prisma)
+    // - no local "other" sentinel, Central itself only has MALE/FEMALE.
     gender: {
         type: String,
-        enum: ['male', 'female', 'other'],
+        enum: ['MALE', 'FEMALE'],
         trim: true
     },
     mtssAccess: {
