@@ -1,7 +1,7 @@
 const winston = require('winston');
 const UserStudent = require('../models/UserStudent');
 const { listStudentsByStatus } = require('../services/mwsDataCenterClient');
-const { deriveUnitFromGrade } = require('../utils/studentUserHelpers');
+const { deriveUnitFromGrade, normalizeGender, normalizeStatus } = require('../utils/studentUserHelpers');
 
 // Mirrors employeeRosterSync.js's shape for students: authenticate()
 // (middleware/auth.js) only checks the local isActive flag, never
@@ -37,7 +37,7 @@ function buildFieldsFromCentral(student) {
     const className = student.current_class;
     const unitInfo = deriveUnitFromGrade(currentGrade, className);
 
-    return {
+    const fields = {
         name: student.full_name,
         nickname: student.nick_name,
         currentGrade,
@@ -46,6 +46,18 @@ function buildFieldsFromCentral(student) {
         department: unitInfo.department,
         isActive: true
     };
+
+    // Central is the source of truth for these too - synced here (not just
+    // at SSO provisioning) so a record that somehow ended up with a stale or
+    // wrong-cased value self-heals on the next run instead of failing every
+    // .save() forever (Mongoose validates the whole document, not just the
+    // fields being changed).
+    const gender = normalizeGender(student.gender);
+    if (gender) fields.gender = gender;
+    const status = normalizeStatus(student.status);
+    if (status) fields.status = status;
+
+    return fields;
 }
 
 function hasChanges(student, nextFields) {
