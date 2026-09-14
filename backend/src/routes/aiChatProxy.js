@@ -55,6 +55,18 @@ router.use(async (req, res) => {
             validateStatus: () => true, // forward MTSS's own status/body as-is, don't throw
         });
 
+        // A 401/403 here means MTSS didn't recognize this email on ITS side
+        // (e.g. never SSO-provisioned into MTSS yet) - it says nothing about
+        // whether THIS app's own session is valid, since router.use(authenticate)
+        // above already confirmed that. Forwarding it verbatim used to let the
+        // frontend's shared axios interceptor (authService.js) misread it as
+        // "my own session is dead" and force a logout/redirect on a user who
+        // was never actually logged out - remapped so it can't be confused
+        // for that.
+        if (response.status === 401 || response.status === 403) {
+            return sendError(res, 'AI chat is not available for this account yet', 424);
+        }
+
         res.status(response.status).json(response.data);
     } catch (error) {
         console.error('aiChatProxy: forwarding to MTSS failed:', error.message);
