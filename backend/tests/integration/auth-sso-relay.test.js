@@ -1,5 +1,4 @@
 const crypto = require('crypto');
-const jwt = require('jsonwebtoken');
 const request = require('supertest');
 const mongoose = require('mongoose');
 
@@ -7,14 +6,19 @@ const mongoose = require('mongoose');
 // token's source hint says otherwise (ssoUserResolution.js) - mock both
 // Central sync modules so the test can tell which one(s) actually ran,
 // without depending on a real Central record existing for these emails.
+// Also mock the code-exchange call (server-to-server to Hub) so this test
+// never needs a real Hub instance to talk to - only verifyHubRelayToken
+// (against a locally-signed token) is exercised for real.
 // jest.mock is hoisted above these requires, so the factory can't close
 // over an outer variable - require the (now-mocked) modules afterward to
 // get references to their jest.fn()s for assertions.
 jest.mock('../../src/utils/studentCentralSync', () => ({ syncStudentFromCentral: jest.fn() }));
 jest.mock('../../src/utils/employeeCentralSync', () => ({ syncEmployeeFromCentral: jest.fn() }));
+jest.mock('../../src/utils/hubSsoExchange', () => ({ exchangeSsoCode: jest.fn() }));
 
 const studentCentralSync = require('../../src/utils/studentCentralSync');
 const employeeCentralSync = require('../../src/utils/employeeCentralSync');
+const { exchangeSsoCode } = require('../../src/utils/hubSsoExchange');
 const cacheService = require('../../src/services/cacheService');
 const { app } = require('../../src/app');
 const User = require('../../src/models/User');
@@ -40,6 +44,7 @@ describe('GET /auth/sso - Hub relay source hint', () => {
 
     afterAll(async () => {
         await User.deleteMany({});
+        await UserStudent.deleteMany({});
         await mongoose.connection.close();
     });
 
@@ -56,38 +61,75 @@ describe('GET /auth/sso - Hub relay source hint', () => {
             department: 'Operational',
             unit: 'Operational',
         });
+        exchangeSsoCode.mockReset();
     });
 
-    function signRelayToken(payload) {
-        return jwt.sign(
-            { sub: 'source-hint-check@millennia21.id', jti: crypto.randomUUID(), ...payload },
-            privateKey,
-            { algorithm: 'RS256', issuer: ISSUER, audience: AUDIENCE, expiresIn: '30s', keyid: 'test-hub-key' },
-        );
+    function base64Url(input) {
+        return Buffer.from(input).toString('base64url');
+    }
+
+    function signRelayToken(overrides) {
+        const now = Math.floor(Date.now() / 1000);
+        const header = { alg: 'RS256', typ: 'JWT', kid: 'test-hub-key' };
+        const payload = {
+            iss: ISSUER,
+            aud: AUDIENCE,
+            sub: 'person-cuid-source-hint',
+            email: 'source-hint-check@millennia21.id',
+            tags: [],
+            jti: crypto.randomUUID(),
+            iat: now,
+            exp: now + 30,
+            ...overrides,
+        };
+        const signingInput = `${base64Url(JSON.stringify(header))}.${base64Url(JSON.stringify(payload))}`;
+        const signature = crypto.sign('RSA-SHA256', Buffer.from(signingInput), privateKey);
+        return `${signingInput}.${signature.toString('base64url')}`;
     }
 
     it('skips the student lookup entirely when the relay token hints source=employee', async () => {
         const token = signRelayToken({ source: 'employee', tags: ['employee', 'staff'] });
+        exchangeSsoCode.mockResolvedValue(token);
 
-        await request(app).get(`/auth/sso?token=${token}`);
+        await request(app).get('/auth/sso?code=opaque-code-1');
 
+        expect(exchangeSsoCode).toHaveBeenCalledWith('opaque-code-1');
         expect(employeeCentralSync.syncEmployeeFromCentral).toHaveBeenCalledWith('source-hint-check@millennia21.id');
         expect(studentCentralSync.syncStudentFromCentral).not.toHaveBeenCalled();
     });
 
-    it('regression: without the source hint being forwarded, every employee login redundantly checks student first', async () => {
-        // No `source` in the token at all - simulates the bug this test
-        // guards against (routes/auth.js used to build relayClaims from
-        // only `{ tags: payload.tags }`, silently dropping payload.source
-        // even though Hub always sends it). resolveOrProvisionSsoUser's
-        // own "no hint" fallback is student-first by design, so this is
-        // the one case where a student lookup for an employee's own email
-        // is expected - anywhere else, it means the hint got lost again.
-        const token = signRelayToken({ tags: ['employee', 'staff'] });
+    it('regression: source=student is forwarded too, not just employee (guards routes/auth.js dropping payload.source when building relayClaims)', async () => {
+        // mws-central-auth's schema requires `source` on every token (Hub
+        // always sends it), so the old "source omitted entirely" token this
+        // test used to sign is no longer constructible as a validly-signed
+        // token - the regression it guards against is really "does
+        // routes/auth.js forward payload.source into relayClaims.source at
+        // all", which the employee case above already covers one value of.
+        // This covers the other enum value, so a `{ tags: payload.tags }`
+        // regression that drops `source` (regardless of which value it
+        // held) still fails one of the two tests.
+        const token = signRelayToken({ source: 'student', tags: [] });
+        exchangeSsoCode.mockResolvedValue(token);
+        studentCentralSync.syncStudentFromCentral.mockResolvedValue({
+            email: 'source-hint-check@millennia21.id',
+            name: 'Test Student',
+            role: 'student',
+            currentGrade: 'Grade 5',
+            className: 'Grade 5 - Orion',
+        });
 
-        await request(app).get(`/auth/sso?token=${token}`);
+        await request(app).get('/auth/sso?code=opaque-code-2');
 
         expect(studentCentralSync.syncStudentFromCentral).toHaveBeenCalledWith('source-hint-check@millennia21.id');
-        expect(employeeCentralSync.syncEmployeeFromCentral).toHaveBeenCalledWith('source-hint-check@millennia21.id');
+        expect(employeeCentralSync.syncEmployeeFromCentral).not.toHaveBeenCalled();
+    });
+
+    it('redirects to an error page without resolving any user when the code exchange itself fails', async () => {
+        exchangeSsoCode.mockRejectedValue(new Error('invalid code'));
+
+        await request(app).get('/auth/sso?code=bad-code');
+
+        expect(employeeCentralSync.syncEmployeeFromCentral).not.toHaveBeenCalled();
+        expect(studentCentralSync.syncStudentFromCentral).not.toHaveBeenCalled();
     });
 });

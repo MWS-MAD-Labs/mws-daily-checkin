@@ -9,6 +9,18 @@ const userSchema = new mongoose.Schema({
         lowercase: true,
         trim: true
     },
+    // Central's stable Person.id - what Hub's relay token now carries as
+    // `sub` (mws-central-auth v0.3.0+), so re-logins after an email change
+    // centrally still find this same account instead of creating a
+    // duplicate. Sparse: existing accounts get this filled in on their
+    // next login (self-healing - see ssoUserResolution.js), or via the
+    // one-time backfillCentralPersonId script.
+    centralPersonId: {
+        type: String,
+        unique: true,
+        sparse: true,
+        trim: true
+    },
     password: {
         type: String,
         required: function () {

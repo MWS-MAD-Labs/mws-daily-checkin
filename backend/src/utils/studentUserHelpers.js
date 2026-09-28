@@ -66,7 +66,8 @@ const buildStudentUserPayload = ({
     className,
     joinAcademicYear,
     googleId,
-    googleProfile
+    googleProfile,
+    centralPersonId
 }) => {
     const normalizedEmail = normalizeEmail(email);
     const username = normalizedEmail ? normalizedEmail.split('@')[0] : undefined;
@@ -74,6 +75,8 @@ const buildStudentUserPayload = ({
 
     return {
         email: normalizedEmail,
+        // Central's Person.id - see the matching note on models/User.js.
+        centralPersonId: normalizeString(centralPersonId),
         name: normalizeString(name),
         role: 'student',
         username,

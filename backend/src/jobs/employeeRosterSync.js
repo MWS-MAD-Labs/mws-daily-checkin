@@ -62,7 +62,12 @@ function buildFieldsFromCentral(employee) {
         employmentStatus: employee.employment_type,
         department: employee.unit,
         unit: employee.unit,
-        isActive: true
+        isActive: true,
+        // Backfills centralPersonId here too, not just at SSO login
+        // (ssoUserResolution.js) - every active employee gets one within
+        // one run of this job (2 minutes) instead of waiting for their
+        // next sign-in, same self-healing posture as the rest of this job.
+        centralPersonId: employee.person_id
     };
 }
 

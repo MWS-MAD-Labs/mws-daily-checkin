@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet";
 import { UserX } from "lucide-react";
-import { StatusMessagePage } from "mws-central-auth-ui";
+import { StatusMessagePage } from "mws-central-auth";
 import AnimatedPage from "@/components/AnimatedPage";
 
 // Fallback only - confirm the real support inbox with the team before relying on this.

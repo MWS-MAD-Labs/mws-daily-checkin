@@ -101,6 +101,34 @@ describe('employeeRosterSync role sync', () => {
     expect(user.role).toBe('staff');
   });
 
+  // Regression: this job backfills centralPersonId (Central's Person.id)
+  // for every active employee, not just at SSO login - see the matching
+  // note on buildFieldsFromCentral. Central always returns person_id here
+  // (see mws-data-center's toEmployeeLookupResponse), so a user missing it
+  // must get it filled on the very next run.
+  test('backfills centralPersonId for a user that does not have one yet', async () => {
+    const user = makeUser({ centralPersonId: undefined });
+    mockUserFind.mockResolvedValue([user]);
+    mockListActiveEmployees.mockResolvedValue([makeEmployee({ person_id: 'person-cuid-1' })]);
+
+    await syncEmployeeRoster();
+
+    expect(user.centralPersonId).toBe('person-cuid-1');
+    expect(user.save).toHaveBeenCalled();
+  });
+
+  test('does not resave a user whose centralPersonId already matches Central (still "no changes")', async () => {
+    const user = makeUser({ role: 'staff', jobLevel: 'Staff', centralPersonId: 'person-cuid-1' });
+    mockUserFind.mockResolvedValue([user]);
+    mockListActiveEmployees.mockResolvedValue([
+      makeEmployee({ job_level: 'Staff', person_id: 'person-cuid-1' }),
+    ]);
+
+    await syncEmployeeRoster();
+
+    expect(user.save).not.toHaveBeenCalled();
+  });
+
   test('admin/superadmin users are excluded from the sync candidates query entirely', async () => {
     mockUserFind.mockResolvedValue([]);
     mockListActiveEmployees.mockResolvedValue([makeEmployee({ job_level: 'Teacher' })]);

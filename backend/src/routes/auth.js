@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const crypto = require('crypto');
 const helmet = require('helmet');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
@@ -10,9 +9,11 @@ const { hasDashboardAccess, hasMtssAccess } = require('../utils/accessControl');
 const { buildRequestUser } = require('../middleware/auth');
 const { syncEmployeeFromCentral } = require('../utils/employeeCentralSync');
 const { verifyHubRelayToken } = require('../utils/hubSsoRelay');
+const { exchangeSsoCode } = require('../utils/hubSsoExchange');
 const { resolveOrProvisionSsoUser } = require('../utils/ssoUserResolution');
 const { createUserAwareRateLimiter } = require('../middleware/rateLimiter');
 const { setAuthCookie, clearAuthCookie, COOKIE_NAME } = require('../utils/authCookie');
+const { verifyHubInternalSecret, parseHubRevocationPayload, HubInternalRequestVerificationError } = require('mws-central-auth/server');
 
 // Tighter than the general apiLimiter (which skips /v1/auth entirely) -
 // this is a sensitive auth entry point, not a regular auth check.
@@ -28,9 +29,12 @@ const isCentralLookupError = (error) => {
 };
 
 // Hub token-relay SSO handoff. Hub already authenticated the user (its own
-// Google login) and mints a short-lived, single-use, audience-scoped token
-// asserting "this email"; we never trust anything beyond that email claim -
-// every profile field still comes fresh from mws-data-center.
+// Google login); the browser only ever carries a short opaque, single-use
+// code (never the token itself - see hubSsoExchange.js), which this
+// backend trades server-to-server for the real relay token before trusting
+// anything. The token asserts a stable Central Person.id (`sub`) plus an
+// email attribute; we never trust anything beyond those claims - every
+// profile field still comes fresh from mws-data-center.
 //
 // app.js's global helmet() defaults Cross-Origin-Opener-Policy to
 // 'same-origin'. That header forces the browser to sever this navigation
@@ -42,25 +46,37 @@ const isCentralLookupError = (error) => {
 // app-wide default.
 router.get('/sso', helmet.crossOriginOpenerPolicy({ policy: 'unsafe-none' }), ssoLimiter, async (req, res) => {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174/daily-checkin';
-    const { token } = req.query;
+    const { code } = req.query;
 
-    if (!token || typeof token !== 'string') {
+    if (!code || typeof code !== 'string') {
         return res.redirect(`${frontendUrl}/?error=sso_missing_token`);
+    }
+
+    let token;
+    try {
+        token = await exchangeSsoCode(code);
+    } catch (error) {
+        console.error('❌ Hub SSO code exchange failed:', error.message);
+        return res.redirect(`${frontendUrl}/?error=sso_invalid_token`);
     }
 
     let payload;
     try {
-        payload = verifyHubRelayToken(token);
+        payload = await verifyHubRelayToken(token);
     } catch (error) {
         console.error('❌ Hub SSO relay token verification failed:', error.message);
         return res.redirect(`${frontendUrl}/?error=sso_invalid_token`);
     }
 
     try {
-        const dbUser = await resolveOrProvisionSsoUser(payload.sub, { tags: payload.tags, source: payload.source });
+        const dbUser = await resolveOrProvisionSsoUser(payload.email, {
+            tags: payload.tags,
+            source: payload.source,
+            personId: payload.sub,
+        });
 
         if (!dbUser) {
-            console.log('❌ No active central record for Hub SSO email:', payload.sub);
+            console.log('❌ No active central record for Hub SSO email:', payload.email);
             return res.redirect(`${frontendUrl}/account-not-found`);
         }
 
@@ -101,7 +117,7 @@ router.get('/sso', helmet.crossOriginOpenerPolicy({ policy: 'unsafe-none' }), ss
     } catch (error) {
         const centralLookupFailed = isCentralLookupError(error);
         console.error('❌ Hub SSO handoff error:', {
-            email: payload.sub,
+            email: payload.email,
             centralLookupFailed,
             status: error?.response?.status,
             path: error?.config?.url,
@@ -241,15 +257,6 @@ router.get('/logout-silent', (req, res) => {
     );
 });
 
-// Constant-time secret compare - avoids leaking how many leading bytes of
-// HUB_INTERNAL_SECRET a guess got right via response-time differences.
-const safeSecretEqual = (a, b) => {
-    const bufA = Buffer.from(String(a || ''));
-    const bufB = Buffer.from(String(b || ''));
-    if (bufA.length !== bufB.length) return false;
-    return crypto.timingSafeEqual(bufA, bufB);
-};
-
 // Back-channel session revocation. Hub calls this directly (server-to-
 // server, not through the user's browser) when signing someone out
 // anywhere - the fan-out iframe (/auth/logout-silent above) depends on the
@@ -259,20 +266,30 @@ const safeSecretEqual = (a, b) => {
 // middleware/auth.js's authenticate checks it, regardless of whether the
 // browser ever visits this app again.
 router.post('/revoke-session', async (req, res) => {
-    const providedSecret = req.headers['x-hub-internal-secret'];
-    const expectedSecret = process.env.HUB_INTERNAL_SECRET;
-    if (!expectedSecret || !safeSecretEqual(providedSecret, expectedSecret)) {
+    if (!process.env.HUB_INTERNAL_SECRET || !verifyHubInternalSecret(req.headers['x-hub-internal-secret'], process.env.HUB_INTERNAL_SECRET)) {
         return sendError(res, 'Unauthorized', 401);
     }
 
-    const email = String(req.body?.email || '').trim().toLowerCase();
-    if (!email) {
-        return sendError(res, 'email is required', 400);
+    let payload;
+    try {
+        payload = parseHubRevocationPayload(req.body);
+    } catch (error) {
+        if (error instanceof HubInternalRequestVerificationError) return sendError(res, 'email is required', 400);
+        throw error;
     }
 
+    // Additive: matching on central_id too (mws-hub sends it alongside
+    // email) means a session still gets revoked even when this app's local
+    // record's email has gone stale relative to what changed centrally
+    // since the person's last login - the same email-staleness class of bug
+    // fixed elsewhere this round.
+    const matchConditions = [{ email: payload.email.trim().toLowerCase() }];
+    if (payload.central_id) matchConditions.push({ centralPersonId: payload.central_id.trim() });
+    const userMatch = matchConditions.length === 1 ? matchConditions[0] : { $or: matchConditions };
+
     await Promise.all([
-        User.updateOne({ email }, { $inc: { sessionVersion: 1 } }),
-        UserStudent.updateOne({ email }, { $inc: { sessionVersion: 1 } })
+        User.updateOne(userMatch, { $inc: { sessionVersion: 1 } }),
+        UserStudent.updateOne(userMatch, { $inc: { sessionVersion: 1 } })
     ]);
 
     sendSuccess(res, 'Session revoked');

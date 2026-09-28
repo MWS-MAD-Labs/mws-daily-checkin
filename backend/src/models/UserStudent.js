@@ -9,6 +9,13 @@ const studentUserSchema = new mongoose.Schema({
         lowercase: true,
         trim: true
     },
+    // Central's stable Person.id - see the matching note on User.js.
+    centralPersonId: {
+        type: String,
+        unique: true,
+        sparse: true,
+        trim: true
+    },
     password: {
         type: String,
         required: function () {
@@ -94,14 +101,21 @@ const studentUserSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
+    // Only these three - a student is only ever enrolled in Elementary,
+    // Junior High, or Kindergarten (confirmed with the product owner); the
+    // rest of Central's units (Directorate, MAD Lab, Pelangi, CARE, BRIDGE,
+    // COMPASS, RISE, SAFE, SHIELD) are staff-only. deriveUnitFromGrade
+    // (studentUserHelpers.js) only ever derives one of these three anyway -
+    // Operational/Finance never appeared in Central's real unit list at all.
     department: {
         type: String,
-        enum: ['Directorate', 'Elementary', 'Junior High', 'Kindergarten', 'Operational', 'MAD Lab', 'Finance', 'Pelangi', 'CARE'],
+        enum: ['Elementary', 'Junior High', 'Kindergarten'],
         trim: true
     },
+    // See the matching note on department above.
     unit: {
         type: String,
-        enum: ['Directorate', 'Elementary', 'Junior High', 'Kindergarten', 'Operational', 'MAD Lab', 'Finance', 'Pelangi', 'CARE'],
+        enum: ['Elementary', 'Junior High', 'Kindergarten'],
         trim: true
     },
     lastLogin: {

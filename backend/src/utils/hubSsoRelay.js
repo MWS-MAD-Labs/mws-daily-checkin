@@ -1,36 +1,43 @@
-const jwt = require('jsonwebtoken');
+const { verifyRelayToken } = require('mws-central-auth/server');
 const cacheService = require('../services/cacheService');
 
-const ISSUER = 'mws-hub';
 const AUDIENCE = 'daily-checkin';
 
-// Verifies a Hub-minted relay token: signature, issuer, audience, expiry
-// (all via jwt.verify's own options), then enforces single-use via jti so a
-// leaked/logged token can't be replayed within its own short validity
-// window. Throws on any failure - callers redirect to a generic error page,
-// never leak which specific check failed to the browser.
-function verifyHubRelayToken(token) {
-    const publicKey = process.env.HUB_SSO_PUBLIC_KEY?.replace(/\\n/g, '\n');
-    if (!publicKey) {
-        throw new Error('HUB_SSO_PUBLIC_KEY is not configured');
+// Wraps this app's own NodeCache-backed cacheService as mws-central-auth's
+// ReplayStore interface, rather than relying on that package's in-process
+// default - cacheService is already a real module-level singleton (proven,
+// already deployed), so there's no reason to hand this app a second, less-
+// tested replay implementation.
+const replayStore = {
+    hasSeen: (jti) => cacheService.hasSeenSsoJti(jti),
+    markSeen: (jti, ttlSeconds) => cacheService.markSsoJtiSeen(jti, ttlSeconds),
+};
+
+// Verifies a Hub-minted relay token through the shared mws-central-auth
+// package (RS256 signature, issuer/audience/expiry, single-use jti) rather
+// than this app's own parallel jsonwebtoken implementation - one
+// verification engine every satellite app shares, not one per app that can
+// quietly drift from the others.
+//
+// Prefers the static HUB_SSO_PUBLIC_KEY (this app's existing, already-
+// deployed config - no new env var required to keep working) and falls
+// back to Hub's JWKS endpoint via HUB_BASE_URL when that isn't set, which
+// survives a Hub signing-key rotation without a redeploy here.
+async function verifyHubRelayToken(token) {
+    const publicKeyPem = process.env.HUB_SSO_PUBLIC_KEY?.replace(/\\n/g, '\n');
+    const hubBaseUrl = process.env.HUB_BASE_URL;
+
+    if (!publicKeyPem && !hubBaseUrl) {
+        throw new Error('Neither HUB_SSO_PUBLIC_KEY nor HUB_BASE_URL is configured');
     }
 
-    const payload = jwt.verify(token, publicKey, {
-        algorithms: ['RS256'],
-        issuer: ISSUER,
+    return verifyRelayToken(token, {
         audience: AUDIENCE,
+        replayStore,
+        ...(publicKeyPem
+            ? { publicKeyPem }
+            : { jwksUrl: `${hubBaseUrl.replace(/\/$/, '')}/.well-known/jwks.json` }),
     });
-
-    if (!payload.jti || !payload.sub) {
-        throw new Error('Relay token missing required claims');
-    }
-
-    if (cacheService.hasSeenSsoJti(payload.jti)) {
-        throw new Error('Relay token already used');
-    }
-    cacheService.markSsoJtiSeen(payload.jti);
-
-    return payload;
 }
 
 module.exports = { verifyHubRelayToken };

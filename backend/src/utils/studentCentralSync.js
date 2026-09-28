@@ -12,6 +12,7 @@ async function syncStudentFromCentral(email) {
 
     return buildStudentUserPayload({
         email: centralStudent.email,
+        centralPersonId: centralStudent.person_id,
         name: centralStudent.full_name,
         nickname: centralStudent.nick_name,
         gender: centralStudent.gender,

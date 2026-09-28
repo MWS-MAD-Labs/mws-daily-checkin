@@ -92,6 +92,21 @@ describe('studentRosterSync', () => {
     expect(student.save).not.toHaveBeenCalled();
   });
 
+  // Regression: this job backfills centralPersonId (Central's Person.id)
+  // for every enrolled student, not just at SSO login - see the matching
+  // note in studentRosterSync.js and employeeRosterSync.js.
+  test('backfills centralPersonId for a student that does not have one yet', async () => {
+    const student = makeStudent({ centralPersonId: undefined });
+    mockUserStudentFind.mockResolvedValue([student]);
+    mockListStudentsByStatus.mockImplementation((status) =>
+      status === 'ACTIVE' ? [makeCentralStudent({ person_id: 'person-cuid-2' })] : []);
+
+    await syncStudentRoster();
+
+    expect(student.centralPersonId).toBe('person-cuid-2');
+    expect(student.save).toHaveBeenCalled();
+  });
+
   test('skips the run (no writes) when Central is unreachable', async () => {
     mockListStudentsByStatus.mockRejectedValue(new Error('network down'));
 

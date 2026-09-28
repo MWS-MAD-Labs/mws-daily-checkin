@@ -44,7 +44,11 @@ function buildFieldsFromCentral(student) {
         className,
         unit: unitInfo.unit,
         department: unitInfo.department,
-        isActive: true
+        isActive: true,
+        // Backfills centralPersonId here too, not just at SSO login
+        // (ssoUserResolution.js) - see the matching note in
+        // employeeRosterSync.js.
+        centralPersonId: student.person_id
     };
 
     // Central is the source of truth for these too - synced here (not just

@@ -6,6 +6,8 @@ function mapCentralEmployee(centralEmployee) {
     return {
         name: centralEmployee.full_name,
         email: centralEmployee.email,
+        // Central's Person.id - see the matching note on models/User.js.
+        centralPersonId: centralEmployee.person_id,
         gender: centralEmployee.gender,
         employeeId: centralEmployee.employee_id,
         jobPosition: centralEmployee.job_position,

@@ -108,4 +108,60 @@ describe('resolveOrProvisionSsoUser - source-hinted lookup order', () => {
         expect(syncStudentFromCentral).toHaveBeenCalledTimes(1);
         expect(syncEmployeeFromCentral).toHaveBeenCalledTimes(1);
     });
+
+    // The actual regression this exists for: Central's email is editable,
+    // so a login after an email change must still find the same account by
+    // centralPersonId (Hub relay token's `sub`) instead of creating a
+    // second, duplicate one under the new email.
+    test('finds an existing employee by centralPersonId even when the live login email has changed', async () => {
+        const existing = await new User({
+            email: 'before-rename@sso-test-checkin.millennia21.id',
+            centralPersonId: 'person-rename-1',
+            name: 'Test Staff',
+            role: 'staff',
+            ssoProvisioned: true,
+        }).save();
+
+        syncEmployeeFromCentral.mockResolvedValue({
+            ...EMPLOYEE_FIELDS,
+            email: 'after-rename@sso-test-checkin.millennia21.id',
+            centralPersonId: 'person-rename-1',
+        });
+
+        const user = await resolveOrProvisionSsoUser('after-rename@sso-test-checkin.millennia21.id', {
+            tags: ['employee'],
+            source: 'employee',
+            personId: 'person-rename-1',
+        });
+
+        expect(user._id.toString()).toBe(existing._id.toString());
+        expect(user.email).toBe('after-rename@sso-test-checkin.millennia21.id');
+        expect(await User.countDocuments({ centralPersonId: 'person-rename-1' })).toBe(1);
+    });
+
+    test('finds an existing student by centralPersonId even when the live login email has changed', async () => {
+        const existing = await new UserStudent({
+            email: 'before-rename@sso-test-checkin.millennia21.id',
+            centralPersonId: 'person-rename-2',
+            name: 'Test Student',
+            role: 'student',
+            ssoProvisioned: true,
+        }).save();
+
+        syncStudentFromCentral.mockResolvedValue({
+            ...STUDENT_FIELDS,
+            email: 'after-rename-student@sso-test-checkin.millennia21.id',
+            centralPersonId: 'person-rename-2',
+        });
+
+        const student = await resolveOrProvisionSsoUser('after-rename-student@sso-test-checkin.millennia21.id', {
+            tags: [],
+            source: 'student',
+            personId: 'person-rename-2',
+        });
+
+        expect(student._id.toString()).toBe(existing._id.toString());
+        expect(student.email).toBe('after-rename-student@sso-test-checkin.millennia21.id');
+        expect(await UserStudent.countDocuments({ centralPersonId: 'person-rename-2' })).toBe(1);
+    });
 });
