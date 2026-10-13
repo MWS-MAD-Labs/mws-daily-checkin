@@ -32,15 +32,9 @@ const AUTH_BASE_URL = GATEWAY_BASE;
 // landing page instead of Hub, depending on which network response comes
 // back first.
 let hubRedirectInFlight = false;
+let authResetInFlight = false;
 
-// Exported so useSilentHubRelogin can check it too - that hook's own hidden
-// iframe attempt fires the instant Redux flips isAuthenticated to false,
-// which can be BEFORE this app's own cross-origin window.location.assign
-// to Hub has actually landed (Hub's session cookie is still valid on
-// Hub's side until the navigate completes). Left unguarded, the iframe's
-// silent relogin can succeed mid-navigate and undo the logout entirely -
-// useCrossTabAuthSync picks up its localStorage write and routes this tab
-// straight back to a logged-in page before the browser ever reaches Hub.
+// True while logout() is navigating to the Hub, so ProtectedRoute does not also navigate locally.
 export const isHubRedirectInFlight = () => hubRedirectInFlight;
 
 // Create axios instance with default config
@@ -96,35 +90,26 @@ api.interceptors.response.use(
             const isOwnApiRequest =
                 !requestBaseUrl || requestBaseUrl === API_BASE_URL || requestBaseUrl === AUTH_BASE_URL;
             const requestPath = String(error?.config?.url || '');
-            const isLoginRequest = /\/auth\/login$/i.test(requestPath);
-            if (isOwnApiRequest && !isLoginRequest) {
-                const msg = String(error.response?.data?.message || '').toLowerCase();
-                const authFailureHints = [
-                    'token expired',
-                    'invalid token',
-                    'jwt expired',
-                    'access token required',
-                    'authentication required',
-                    'user not found or inactive',
-                ];
-                const shouldResetAuth = !msg || authFailureHints.some((hint) => msg.includes(hint));
-                if (shouldResetAuth) {
-                    clearStoredAuthSession();
-                    // import.meta.env.BASE_URL is '/daily-checkin/' in
-                    // production (vite.config.js), '/' in standalone local
-                    // dev - this bypasses React Router, so it needs the
-                    // prefix added explicitly rather than getting it from a
-                    // basename. Skipped entirely while a Hub redirect is
-                    // already underway (see hubRedirectInFlight above) - this
-                    // would otherwise race it and can win, landing the user
-                    // back here instead of at Hub.
-                    if (
-                        !hubRedirectInFlight &&
-                        typeof window !== 'undefined' &&
-                        window.location.pathname !== import.meta.env.BASE_URL
-                    ) {
-                        window.location.assign(import.meta.env.BASE_URL);
-                    }
+            const isAuthEntryRequest = /\/auth\/(login|hub-launch|sso)$/i.test(requestPath);
+            if (isOwnApiRequest && !isAuthEntryRequest && !authResetInFlight) {
+                authResetInFlight = true;
+                clearStoredAuthSession();
+                if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new Event('daily-checkin:auth-cleared'));
+                }
+                // import.meta.env.BASE_URL is '/daily-checkin/' in
+                // production (vite.config.js), '/' in standalone local
+                // dev - this bypasses React Router, so it needs the
+                // prefix added explicitly rather than getting it from a
+                // basename. Skipped entirely while a Hub redirect is
+                // already underway (see hubRedirectInFlight above) - this
+                // would otherwise race it and can win, landing the user
+                // back here instead of at Hub.
+                if (
+                    !hubRedirectInFlight &&
+                    window.location.pathname !== import.meta.env.BASE_URL
+                ) {
+                    window.location.assign(import.meta.env.BASE_URL);
                 }
             }
         }
@@ -133,11 +118,6 @@ api.interceptors.response.use(
 );
 
 // Auth API functions
-export const login = async (email, password) => {
-    const response = await api.post('/auth/login', { email, password }, { baseURL: AUTH_BASE_URL });
-    return response;
-};
-
 export const logout = async () => {
     // Set before the request even fires: the backend clears this app's
     // cookie as part of handling it, so another in-flight request can 401
@@ -159,10 +139,8 @@ export const logout = async () => {
 
     clearStoredAuthSession();
 
-    // The backend tells us where to go so the Hub session ends too. It has to
-    // be a real navigation: Hub's cookie lives on Hub's domain, so nothing
-    // this app calls from the background can clear it. Every caller of
-    // logout() gets this for free by living in one place.
+    // The backend gives the Hub's logout address. Going there, in this same tab, makes the Hub end the sessions
+    // in the other apps and show its front page. It has to be a real navigation since the Hub is another origin.
     const hubLogoutUrl = response?.data?.data?.hubLogoutUrl;
     if (hubLogoutUrl) {
         window.location.assign(hubLogoutUrl);

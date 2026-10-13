@@ -4,6 +4,7 @@ const { normalizeEmail, deriveUnitFromGrade } = require('./studentUserHelpers');
 const { syncEmployeeFromCentral } = require('./employeeCentralSync');
 const { syncStudentFromCentral } = require('./studentCentralSync');
 const { deriveRoleFromCentralTags } = require('./jobLevelRoleMapping');
+const { applyEntitlementProjection } = require('./centralEntitlement');
 
 // superadmin has no Central/Hub concept at all - it can only ever be
 // granted locally, so the automated sync must never downgrade it back to
@@ -32,7 +33,7 @@ async function tryResolveAsStudent(email, centralPersonId) {
     let centralStudentFields = null;
     let studentLookupFailed = false;
     try {
-        centralStudentFields = await syncStudentFromCentral(email);
+        centralStudentFields = await syncStudentFromCentral(email, centralPersonId);
     } catch (error) {
         console.error('⚠️ SSO student lookup failed:', error.message);
         studentLookupFailed = true;
@@ -89,7 +90,7 @@ async function tryResolveAsEmployee(email, tags, centralPersonId) {
     // Staff identity is re-validated against Central on every login, same
     // posture as Google OAuth and manual login - a network failure here
     // propagates so the caller can tell "not found" apart from "couldn't check".
-    const centralFields = await syncEmployeeFromCentral(email);
+    const centralFields = await syncEmployeeFromCentral(email, centralPersonId);
     if (!centralFields) {
         return null;
     }
@@ -152,23 +153,47 @@ async function resolveOrProvisionSsoUser(rawEmail, relayClaims = {}) {
     // v0.3.0+) - see the matching note on models/User.js.
     const centralPersonId = relayClaims.personId || null;
 
+    const persistEntitlement = async (result, sourceModel) => {
+        if (!result || !relayClaims.entitlement) return result;
+        const currentVersion = Number(result.centralEntitlementVersion || 0);
+        // Versions only compare within one entitlement: a group's is a timestamp, a personal one a counter.
+        const sameEntitlement = result.centralEntitlementId === relayClaims.entitlement.id;
+        if (sameEntitlement && currentVersion > relayClaims.entitlement.version) {
+            throw new Error('Relay entitlement version is older than the local projection');
+        }
+        applyEntitlementProjection(result, relayClaims.entitlement);
+        await result.save();
+
+        const counterpartModel = sourceModel === User ? UserStudent : User;
+        const identityMatches = [];
+        if (result.centralPersonId) identityMatches.push({ centralPersonId: result.centralPersonId });
+        if (result.centralEntitlementId) identityMatches.push({ centralEntitlementId: result.centralEntitlementId });
+        if (identityMatches.length > 0) {
+            await counterpartModel.updateMany(
+                { isActive: true, $or: identityMatches },
+                { $set: { isActive: false }, $inc: { sessionVersion: 1 } },
+            );
+        }
+        return result;
+    };
+
     if (source === 'employee') {
         const employeeResult = await tryResolveAsEmployee(email, tags, centralPersonId);
-        if (employeeResult) return employeeResult;
-        return tryResolveAsStudent(email, centralPersonId);
+        const result = employeeResult || await tryResolveAsStudent(email, centralPersonId);
+        return persistEntitlement(result, employeeResult ? User : UserStudent);
     }
 
     if (source === 'student') {
         const studentResult = await tryResolveAsStudent(email, centralPersonId);
-        if (studentResult) return studentResult;
-        return tryResolveAsEmployee(email, tags, centralPersonId);
+        const result = studentResult || await tryResolveAsEmployee(email, tags, centralPersonId);
+        return persistEntitlement(result, studentResult ? UserStudent : User);
     }
 
     // No hint (relay claims omit source, or a caller other than the Hub
     // relay flow) - fall back to the original student-first order.
     const studentResult = await tryResolveAsStudent(email, centralPersonId);
-    if (studentResult) return studentResult;
-    return tryResolveAsEmployee(email, tags, centralPersonId);
+    const result = studentResult || await tryResolveAsEmployee(email, tags, centralPersonId);
+    return persistEntitlement(result, studentResult ? UserStudent : User);
 }
 
 module.exports = { resolveOrProvisionSsoUser, nextRole };

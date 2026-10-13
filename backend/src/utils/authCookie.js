@@ -1,4 +1,5 @@
 const COOKIE_NAME = 'daily_checkin_token';
+const SESSION_MAX_AGE_MS = 15 * 60 * 1000;
 
 // Parses the same shorthand JWT_EXPIRES_IN already uses ('1d', '8h', '90m',
 // '30s') into milliseconds for cookie maxAge. Not the full jsonwebtoken/ms
@@ -30,7 +31,7 @@ function cookieOptions() {
 function setAuthCookie(res, token) {
     res.cookie(COOKIE_NAME, token, {
         ...cookieOptions(),
-        maxAge: parseExpiresInMs(process.env.JWT_EXPIRES_IN),
+        maxAge: Math.min(parseExpiresInMs(process.env.JWT_EXPIRES_IN || '15m'), SESSION_MAX_AGE_MS),
     });
 }
 
@@ -38,4 +39,4 @@ function clearAuthCookie(res) {
     res.clearCookie(COOKIE_NAME, cookieOptions());
 }
 
-module.exports = { COOKIE_NAME, setAuthCookie, clearAuthCookie };
+module.exports = { COOKIE_NAME, SESSION_MAX_AGE_MS, setAuthCookie, clearAuthCookie };

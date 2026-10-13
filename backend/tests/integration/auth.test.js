@@ -1,21 +1,6 @@
 const request = require('supertest');
 const mongoose = require('mongoose');
 
-// /auth/login re-verifies staff identity against mws-data-center on every
-// login now (routes/auth.js) - mock it rather than depending on a real
-// Central record existing for this test's fake email.
-jest.mock('../../src/utils/employeeCentralSync', () => ({
-    syncEmployeeFromCentral: jest.fn().mockResolvedValue({
-        name: 'Test User',
-        employeeId: '99.99.001',
-        jobPosition: 'Staff',
-        jobLevel: 'Staff',
-        employmentStatus: 'Permanent',
-        department: 'Operational',
-        unit: 'Operational',
-    }),
-}));
-
 const { app } = require('../../src/app');
 const User = require('../../src/models/User');
 
@@ -40,32 +25,18 @@ describe('Authentication API', () => {
     // under it - and the session lives in an httpOnly cookie set on this
     // response now (authCookie.js), not a token in the body.
     describe('POST /auth/login', () => {
-        it('should login successfully with valid credentials', async () => {
-            // Create test user
-            const testUser = {
-                email: 'test@school.com',
-                password: 'password123',
-                name: 'Test User',
-                role: 'staff'
-            };
-
-            await User.create(testUser);
-
+        it('returns 410 even when valid legacy credentials exist', async () => {
+            await User.create({ email: 'test@school.com', password: 'password123', name: 'Test User', role: 'staff' });
             const response = await request(app)
                 .post('/auth/login')
-                .send({
-                    email: testUser.email,
-                    password: 'password123'
-                });
+                .send({ email: 'test@school.com', password: 'password123' });
 
-            expect(response.status).toBe(200);
-            expect(response.body.success).toBe(true);
-            expect(response.body.data).toHaveProperty('user');
-            expect(response.body.data.user.email).toBe(testUser.email);
-            expect(response.headers['set-cookie']).toBeDefined();
+            expect(response.status).toBe(410);
+            expect(response.body.success).toBe(false);
+            expect(response.body.message).toMatch(/Hub/);
         });
 
-        it('should return 401 for invalid credentials', async () => {
+        it('returns 410 for invalid credentials without disclosing account existence', async () => {
             const response = await request(app)
                 .post('/auth/login')
                 .send({
@@ -73,55 +44,21 @@ describe('Authentication API', () => {
                     password: 'wrongpassword'
                 });
 
-            expect(response.status).toBe(401);
+            expect(response.status).toBe(410);
             expect(response.body.success).toBe(false);
         });
 
-        it('should validate required fields', async () => {
+        it('returns 410 without validating password payloads', async () => {
             const response = await request(app)
                 .post('/auth/login')
                 .send({});
 
-            expect(response.status).toBe(400);
+            expect(response.status).toBe(410);
             expect(response.body.success).toBe(false);
-            expect(response.body.errors).toBeDefined();
         });
     });
 
     describe('GET /auth/me', () => {
-        // request.agent keeps the httpOnly cookie from the login response
-        // and resends it automatically on later requests through the same
-        // agent, the same way a real browser session would - there's no
-        // token in the response body anymore to carry over by hand.
-        let agent;
-        let testUser;
-
-        beforeEach(async () => {
-            testUser = await User.create({
-                email: 'test@school.com',
-                password: 'password123',
-                name: 'Test User',
-                role: 'staff'
-            });
-
-            agent = request.agent(app);
-            await agent
-                .post('/auth/login')
-                .send({
-                    email: 'test@school.com',
-                    password: 'password123'
-                });
-        });
-
-        it('should return current user profile', async () => {
-            const response = await agent.get('/auth/me');
-
-            expect(response.status).toBe(200);
-            expect(response.body.success).toBe(true);
-            expect(response.body.data.user.email).toBe(testUser.email);
-            expect(response.body.data.user.name).toBe(testUser.name);
-        });
-
         it('should return 401 without token', async () => {
             const response = await request(app).get('/auth/me');
 

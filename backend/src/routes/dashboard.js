@@ -10,12 +10,14 @@ const {
     confirmSupportRequest,
     getUnitMembers
 } = require('../controllers/dashboardController');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requirePermission } = require('../middleware/auth');
+const { PERMISSIONS } = require('../constants/permissions');
 const { hasDashboardAccess, getEffectiveDashboardRole } = require('../utils/accessControl');
 const { validateQuery } = require('../middleware/validation');
 
 // All dashboard routes require authentication and appropriate access
 router.use(authenticate);
+router.use(requirePermission(PERMISSIONS.DASHBOARD_READ));
 // Allow dashboard access for native or delegated roles
 router.use((req, res, next) => {
     if (!hasDashboardAccess(req.user)) {
@@ -56,9 +58,9 @@ router.get('/user-overview/:userId', require('../controllers/dashboardController
 router.get('/unit/members', getUnitMembers);
 
 // Export dashboard data
-router.get('/export', exportDashboardData);
+router.get('/export', requirePermission(PERMISSIONS.DASHBOARD_EXPORT), exportDashboardData);
 
 // Confirm support request
-router.post('/support-request/:requestId/confirm', confirmSupportRequest);
+router.post('/support-request/:requestId/confirm', requirePermission(PERMISSIONS.SUPPORT_REQUESTS_MANAGE), confirmSupportRequest);
 
 module.exports = router;

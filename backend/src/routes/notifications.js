@@ -7,17 +7,14 @@ const {
     markAllAsRead,
     deleteNotification,
     createSystemNotification,
-    createSupportRequestNotification,
-    handleSlackAction
+    createSupportRequestNotification
 } = require('../controllers/notificationController');
-const { authenticate, requireAdmin } = require('../middleware/auth');
+const { authenticate, requirePermission } = require('../middleware/auth');
+const { PERMISSIONS } = require('../constants/permissions');
 const { validateQuery } = require('../middleware/validation');
 
-// All notification routes require authentication
-router.use(authenticate);
-
 // Get user's notifications with pagination and filtering
-router.get('/', validateQuery({
+router.get('/', authenticate, requirePermission(PERMISSIONS.NOTIFICATIONS_SELF_MANAGE), validateQuery({
     page: 'number',
     limit: 'number',
     isRead: 'boolean',
@@ -26,22 +23,19 @@ router.get('/', validateQuery({
 }), getUserNotifications);
 
 // Get notification statistics for the authenticated user
-router.get('/stats', getNotificationStats);
+router.get('/stats', authenticate, requirePermission(PERMISSIONS.NOTIFICATIONS_SELF_MANAGE), getNotificationStats);
 
 // Mark a specific notification as read
-router.patch('/:notificationId/read', markAsRead);
+router.patch('/:notificationId/read', authenticate, requirePermission(PERMISSIONS.NOTIFICATIONS_SELF_MANAGE), markAsRead);
 
 // Mark all notifications as read for the authenticated user
-router.patch('/read-all', markAllAsRead);
+router.patch('/read-all', authenticate, requirePermission(PERMISSIONS.NOTIFICATIONS_SELF_MANAGE), markAllAsRead);
 
 // Delete a notification
-router.delete('/:notificationId', deleteNotification);
+router.delete('/:notificationId', authenticate, requirePermission(PERMISSIONS.NOTIFICATIONS_SELF_MANAGE), deleteNotification);
 
 // Admin-only routes for creating notifications
-router.post('/system', requireAdmin, createSystemNotification);
-router.post('/support-request', requireAdmin, createSupportRequestNotification);
-
-// Slack interactive actions (no authentication required for Slack webhooks)
-router.post('/slack/actions', handleSlackAction);
+router.post('/system', authenticate, requirePermission(PERMISSIONS.NOTIFICATIONS_CREATE), createSystemNotification);
+router.post('/support-request', authenticate, requirePermission(PERMISSIONS.NOTIFICATIONS_CREATE), createSupportRequestNotification);
 
 module.exports = router;

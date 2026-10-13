@@ -1,5 +1,4 @@
 const crypto = require('crypto');
-const cacheService = require('../../src/services/cacheService');
 const { verifyHubRelayToken } = require('../../src/utils/hubSsoRelay');
 
 const ISSUER = 'mws-hub';
@@ -34,6 +33,14 @@ function relayPayload(overrides = {}) {
         jti: crypto.randomUUID(),
         iat: now,
         exp: now + 30,
+        entitlement: {
+            id: 'ent-relay-test',
+            application_id: 'daily-checkin',
+            organization_id: 'org-test',
+            role: 'teacher',
+            permissions: ['checkin.self.read'],
+            version: 1,
+        },
         ...overrides,
     };
 }
@@ -55,8 +62,6 @@ describe('Hub SSO relay verifier (via mws-central-auth)', () => {
 
     beforeEach(() => {
         process.env.HUB_SSO_PUBLIC_KEY = publicKey.replace(/\n/g, '\\n');
-        cacheService.hasSeenSsoJti = jest.fn().mockReturnValue(false);
-        cacheService.markSsoJtiSeen = jest.fn();
     });
 
     test('accepts a Hub-style RS256 relay token, sub is the Central Person.id', async () => {
@@ -67,11 +72,10 @@ describe('Hub SSO relay verifier (via mws-central-auth)', () => {
         expect(payload.sub).toBe('person-cuid-1');
         expect(payload.email).toBe('teacher@millennia21.id');
         expect(payload.aud).toBe(AUDIENCE);
-        expect(cacheService.markSsoJtiSeen).toHaveBeenCalledWith(payload.jti, expect.any(Number));
+        expect(payload.entitlement.id).toBe('ent-relay-test');
     });
 
     test('rejects a replayed jti on a second verification of the same token', async () => {
-        cacheService.hasSeenSsoJti.mockReturnValueOnce(false).mockReturnValueOnce(true);
         const token = signRs256(relayPayload(), privateKey);
 
         await verifyHubRelayToken(token);
@@ -82,7 +86,6 @@ describe('Hub SSO relay verifier (via mws-central-auth)', () => {
         const maliciousToken = signHs256WithPublicKeyAsSecret(relayPayload({ sub: 'attacker' }), publicKey);
 
         await expect(verifyHubRelayToken(maliciousToken)).rejects.toThrow();
-        expect(cacheService.markSsoJtiSeen).not.toHaveBeenCalled();
     });
 
     test('rejects a payload missing the email claim', async () => {

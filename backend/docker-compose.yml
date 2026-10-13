@@ -16,7 +16,17 @@ services:
       CORS_ORIGINS: https://app.millenniaws.sch.id,http://localhost:5173
       MONGODB_URI: ${MONGODB_URI}
       JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRES_IN: 1d
+      JWT_EXPIRES_IN: 15m
+      HUB_BASE_URL: ${HUB_BASE_URL}
+      HUB_INTERNAL_SECRET: ${HUB_INTERNAL_SECRET}
+      HUB_SSO_PUBLIC_KEY: ${HUB_SSO_PUBLIC_KEY:-}
+      HUB_STATE_COOKIE_PATH: ${HUB_STATE_COOKIE_PATH:-/}
+      HUB_REPLAY_STORE: ${HUB_REPLAY_STORE:-mongo}
+      CENTRAL_ORGANIZATION_ID: ${CENTRAL_ORGANIZATION_ID:-}
+      CENTRAL_ENTITLEMENT_ORGANIZATION_ID: ${CENTRAL_ENTITLEMENT_ORGANIZATION_ID:-}
+      CENTRAL_ENTITLEMENT_BACKFILL_FILE: ${CENTRAL_ENTITLEMENT_BACKFILL_FILE:-/run/secrets/daily-checkin-entitlements.json}
+      MWS_DATA_CENTER_API_URL: ${MWS_DATA_CENTER_API_URL}
+      MWS_DATA_CENTER_API_TOKEN: ${MWS_DATA_CENTER_API_TOKEN}
       AI_CHAT_PROXY_SECRET: ${AI_CHAT_PROXY_SECRET}
       MTSS_API_BASE_URL: https://app.millenniaws.sch.id/mtss/api/v1
       GOOGLE_AI_API_KEY: ${GOOGLE_AI_API_KEY}
@@ -45,6 +55,8 @@ services:
       CLOUDINARY_CLOUD_NAME: deldcwiji
       CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
       CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+    volumes:
+      - ${CENTRAL_ENTITLEMENT_BACKFILL_HOST_FILE:-./secrets/daily-checkin-entitlements.json}:${CENTRAL_ENTITLEMENT_BACKFILL_FILE:-/run/secrets/daily-checkin-entitlements.json}:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/health >/dev/null 2>&1 || exit 1"]
       interval: 30s

@@ -3,6 +3,7 @@ const User = require('../models/User');
 const UserStudent = require('../models/UserStudent');
 const { sendError } = require('../utils/response');
 const { COOKIE_NAME } = require('../utils/authCookie');
+const { expectedOrganizationId } = require('../utils/centralEntitlement');
 const {
     buildDashboardAccessProfile,
     buildMtssAccessProfile,
@@ -39,7 +40,12 @@ const buildRequestUser = (user) => {
         dashboardRole: dashboardAccess.effectiveRole,
         dashboardAccess,
         mtssRole: mtssAccess.effectiveRole,
-        mtssAccess
+        mtssAccess,
+        permissions: user.centralEntitlementPermissions || [],
+        entitlementRole: user.centralEntitlementRole || null,
+        entitlementId: user.centralEntitlementId || null,
+        entitlementVersion: user.centralEntitlementVersion ?? null,
+        entitlementOrganizationId: user.centralEntitlementOrganizationId || null,
     };
 };
 
@@ -92,6 +98,17 @@ const authenticate = async (req, res, next) => {
             return sendError(res, 'Session has been revoked', 401);
         }
 
+        const organizationId = expectedOrganizationId();
+        const validEntitlement = organizationId
+            && user.centralEntitlementApplicationId === 'daily-checkin'
+            && user.centralEntitlementOrganizationId === organizationId
+            && decoded.entitlementId === user.centralEntitlementId
+            && decoded.entitlementVersion === user.centralEntitlementVersion
+            && decoded.entitlementOrganizationId === user.centralEntitlementOrganizationId;
+        if (!validEntitlement) {
+            return sendError(res, 'Central entitlement is missing, stale, or invalid', 401);
+        }
+
         // Attach user to request object
         req.user = buildRequestUser(user);
 
@@ -106,6 +123,20 @@ const authenticate = async (req, res, next) => {
         console.error('Auth middleware error:', error);
         return sendError(res, 'Authentication failed', 500);
     }
+};
+
+const requirePermission = (permission) => (req, res, next) => {
+    if (!req.user) return sendError(res, 'Authentication required', 401);
+    if (!req.user.permissions.includes(permission)) return sendError(res, 'Insufficient permissions', 403);
+    next();
+};
+
+const requireAnyPermission = (...permissions) => (req, res, next) => {
+    if (!req.user) return sendError(res, 'Authentication required', 401);
+    if (!permissions.some((permission) => req.user.permissions.includes(permission))) {
+        return sendError(res, 'Insufficient permissions', 403);
+    }
+    next();
 };
 
 // Role-based authorization middleware
@@ -183,5 +214,7 @@ module.exports = {
     requireStaffOrTeacher,
     requireTeacherAccess,
     requireAuthenticated,
-    buildRequestUser
+    buildRequestUser,
+    requirePermission,
+    requireAnyPermission,
 };

@@ -6,15 +6,20 @@
   "type": "commonjs",
   "scripts": {
     "start": "node src/server.js",
+    "predev": "node src/scripts/syncPermissions.js --soft --retries 1 --wait 3",
     "dev": "nodemon src/server.js",
-    "test": "jest",
+    "test": "jest --runInBand",
     "test:smoke": "jest tests/smoke --runInBand",
     "test:watch": "jest --watch",
     "seed": "node src/scripts/seedUsersFromData.js",
     "sync:users:latest": "node src/scripts/syncLatestUserRoster.js --apply",
     "sync:users:latest:dry": "node src/scripts/syncLatestUserRoster.js",
     "backfill:central-person-id": "node src/scripts/backfillCentralPersonId.js --apply",
-    "backfill:central-person-id:dry": "node src/scripts/backfillCentralPersonId.js"
+    "backfill:central-person-id:dry": "node src/scripts/backfillCentralPersonId.js",
+    "backfill:entitlements": "node src/scripts/backfillCentralEntitlements.js --apply",
+    "backfill:entitlements:dry": "node src/scripts/backfillCentralEntitlements.js",
+    "permissions:sync": "node src/scripts/syncPermissions.js",
+    "permissions:check": "node src/scripts/syncPermissions.js --check"
   },
   "keywords": [
     "emotional-wellness",
@@ -42,7 +47,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.19.1",
     "multer": "^2.0.2",
-    "mws-central-auth": "github:MWS-MAD-Labs/mws-central-auth#v0.5.3",
+    "mws-central-auth": "github:MWS-MAD-Labs/mws-central-auth#v0.7.0",
     "node-cache": "^5.1.2",
     "nodemailer": "^7.0.10",
     "socket.io": "^4.8.1",

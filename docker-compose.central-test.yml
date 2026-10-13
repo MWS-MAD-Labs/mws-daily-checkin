@@ -21,7 +21,15 @@ services:
       PORT: 3001
       MONGODB_URI: ${MONGODB_URI}
       JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRES_IN: 1d
+      JWT_EXPIRES_IN: 15m
+      HUB_BASE_URL: ${HUB_BASE_URL}
+      HUB_INTERNAL_SECRET: ${HUB_INTERNAL_SECRET}
+      HUB_SSO_PUBLIC_KEY: ${HUB_SSO_PUBLIC_KEY:-}
+      HUB_STATE_COOKIE_PATH: ${HUB_STATE_COOKIE_PATH:-/}
+      HUB_REPLAY_STORE: ${HUB_REPLAY_STORE:-mongo}
+      CENTRAL_ORGANIZATION_ID: ${CENTRAL_ORGANIZATION_ID:-}
+      CENTRAL_ENTITLEMENT_ORGANIZATION_ID: ${CENTRAL_ENTITLEMENT_ORGANIZATION_ID:-}
+      CENTRAL_ENTITLEMENT_BACKFILL_FILE: ${CENTRAL_ENTITLEMENT_BACKFILL_FILE:-/run/secrets/daily-checkin-entitlements.json}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8090}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8090}
       # Central's staging API, reached over the private LAN IP - swap for
@@ -42,6 +50,8 @@ services:
       SMTP_FROM: no-reply@millennia21.id
       RATE_LIMIT_WINDOW: 15
       RATE_LIMIT_MAX_REQUESTS: 600
+    volumes:
+      - ${CENTRAL_ENTITLEMENT_BACKFILL_HOST_FILE:-./secrets/daily-checkin-entitlements.json}:${CENTRAL_ENTITLEMENT_BACKFILL_FILE:-/run/secrets/daily-checkin-entitlements.json}:ro
     ports:
       - "3020:3001"
     networks:

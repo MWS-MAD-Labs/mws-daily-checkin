@@ -1,4 +1,4 @@
-const { lookupEmployeeByEmail, lookupEmployeeByEmployeeId } = require('../services/mwsDataCenterClient');
+const { lookupEmployeeByEmail, lookupEmployeeByPersonId, lookupEmployeeByEmployeeId } = require('../services/mwsDataCenterClient');
 
 // email is included so callers can tell when a live login email has drifted
 // from what's on file centrally (see syncEmployeeFromCentralWithFallback).
@@ -22,8 +22,10 @@ function mapCentralEmployee(centralEmployee) {
 // email has no active employee record there (caller should reject login).
 // mws-data-center is the source of truth for unit naming — synced as-is,
 // no local enum gatekeeping it.
-async function syncEmployeeFromCentral(email) {
-    const centralEmployee = await lookupEmployeeByEmail(email);
+async function syncEmployeeFromCentral(email, centralPersonId) {
+    const centralEmployee = centralPersonId
+        ? await lookupEmployeeByPersonId(centralPersonId) || await lookupEmployeeByEmail(email)
+        : await lookupEmployeeByEmail(email);
     if (!centralEmployee) return null;
     return mapCentralEmployee(centralEmployee);
 }

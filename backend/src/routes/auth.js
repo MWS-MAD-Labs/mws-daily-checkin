@@ -9,15 +9,26 @@ const { hasDashboardAccess, hasMtssAccess } = require('../utils/accessControl');
 const { buildRequestUser } = require('../middleware/auth');
 const { syncEmployeeFromCentral } = require('../utils/employeeCentralSync');
 const { verifyHubRelayToken } = require('../utils/hubSsoRelay');
-const { exchangeSsoCode } = require('../utils/hubSsoExchange');
+const { hubSso, cookieOptions } = require('../utils/hubSso');
 const { resolveOrProvisionSsoUser } = require('../utils/ssoUserResolution');
 const { createUserAwareRateLimiter } = require('../middleware/rateLimiter');
 const { setAuthCookie, clearAuthCookie, COOKIE_NAME } = require('../utils/authCookie');
-const { verifyHubInternalSecret, parseHubRevocationPayload, HubInternalRequestVerificationError } = require('mws-central-auth/server');
 
 // Tighter than the general apiLimiter (which skips /v1/auth entirely) -
 // this is a sensitive auth entry point, not a regular auth check.
 const ssoLimiter = createUserAwareRateLimiter({ windowMinutes: 1, max: 20, skip: () => false });
+
+router.get('/hub-launch', ssoLimiter, (req, res) => {
+    let sso;
+    try {
+        sso = hubSso();
+    } catch {
+        return sendError(res, 'Hub login is not configured', 503);
+    }
+    const { url, cookie } = sso.launch.begin();
+    res.cookie(cookie.name, cookie.value, cookieOptions(cookie));
+    res.redirect(url);
+});
 
 const isCentralLookupError = (error) => {
     const baseUrl = error?.config?.baseURL;
@@ -46,15 +57,31 @@ const isCentralLookupError = (error) => {
 // app-wide default.
 router.get('/sso', helmet.crossOriginOpenerPolicy({ policy: 'unsafe-none' }), ssoLimiter, async (req, res) => {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174/daily-checkin';
-    const { code } = req.query;
+    const { code, state } = req.query;
 
     if (!code || typeof code !== 'string') {
         return res.redirect(`${frontendUrl}/?error=sso_missing_token`);
     }
+    let sso;
+    try {
+        sso = hubSso();
+    } catch {
+        return res.redirect(`${frontendUrl}/?error=sso_failed`);
+    }
+    const cookieName = sso.callback.clearCookie().name;
+    const action = sso.callback.decide({ code, state, cookieState: req.cookies?.[cookieName] });
+    // The Hub started this login (a card click): Daily starts its own round, and the Hub signs the person in again.
+    if (action === 'restart') {
+        return res.redirect(`${frontendUrl.replace(/\/$/, '')}/auth/hub-launch`);
+    }
+    if (action === 'reject') {
+        return res.redirect(`${frontendUrl}/?error=sso_invalid_state`);
+    }
+    res.clearCookie(cookieName, { ...cookieOptions(sso.callback.clearCookie()), maxAge: undefined });
 
     let token;
     try {
-        token = await exchangeSsoCode(code);
+        token = await sso.exchange(code, state);
     } catch (error) {
         console.error('❌ Hub SSO code exchange failed:', error.message);
         return res.redirect(`${frontendUrl}/?error=sso_invalid_token`);
@@ -73,6 +100,7 @@ router.get('/sso', helmet.crossOriginOpenerPolicy({ policy: 'unsafe-none' }), ss
             tags: payload.tags,
             source: payload.source,
             personId: payload.sub,
+            entitlement: payload.entitlement,
         });
 
         if (!dbUser) {
@@ -86,9 +114,17 @@ router.get('/sso', helmet.crossOriginOpenerPolicy({ policy: 'unsafe-none' }), ss
         }
 
         const sessionToken = jwt.sign(
-            { userId: dbUser._id, email: dbUser.email, role: dbUser.role, sessionVersion: dbUser.sessionVersion || 0 },
+            {
+                userId: dbUser._id,
+                email: dbUser.email,
+                role: dbUser.role,
+                sessionVersion: dbUser.sessionVersion || 0,
+                entitlementId: dbUser.centralEntitlementId,
+                entitlementVersion: dbUser.centralEntitlementVersion,
+                entitlementOrganizationId: dbUser.centralEntitlementOrganizationId,
+            },
             process.env.JWT_SECRET,
-            { expiresIn: process.env.JWT_EXPIRES_IN || '1d' }
+            { expiresIn: '15m' }
         );
         setAuthCookie(res, sessionToken);
 
@@ -128,112 +164,33 @@ router.get('/sso', helmet.crossOriginOpenerPolicy({ policy: 'unsafe-none' }), ss
 });
 
 // Manual login route
-router.post('/login', require('../middleware/validation').validate(require('../utils/validationSchemas').userLoginSchema), async (req, res) => {
-    try {
-        const { email, password } = req.body;
-        const normalizedEmail = String(email || '').trim().toLowerCase();
-
-        // Find user by email (staff first, then students)
-        let user = await User.findOne({ email: normalizedEmail }).select('+password');
-        let userModel = User;
-        if (!user) {
-            user = await UserStudent.findOne({ email: normalizedEmail }).select('+password');
-            userModel = UserStudent;
-        }
-
-        if (!user) {
-            return sendError(res, 'Invalid credentials', 401);
-        }
-
-        // Check password
-        const isValidPassword = await user.comparePassword(password);
-        if (!isValidPassword) {
-            return sendError(res, 'Invalid credentials', 401);
-        }
-
-        // Staff identity is validated/synced against mws-data-center on every
-        // login — students aren't covered by that API yet, so left as-is.
-        if (userModel === User) {
-            let centralFields;
-            try {
-                centralFields = await syncEmployeeFromCentral(normalizedEmail);
-            } catch (error) {
-                console.error('mws-data-center lookup failed:', error.message);
-                return sendError(res, 'Unable to verify employee with central database', 502);
-            }
-
-            if (!centralFields) {
-                return sendError(res, 'Employee not found or inactive in central database', 403);
-            }
-
-            Object.assign(user, centralFields);
-        }
-
-        user.lastLogin = new Date();
-        await user.save();
-
-        // Generate JWT token
-        const jwt = require('jsonwebtoken');
-        const token = jwt.sign(
-            {
-                userId: user._id,
-                email: user.email,
-                role: user.role,
-                sessionVersion: user.sessionVersion || 0
-            },
-            process.env.JWT_SECRET,
-            { expiresIn: process.env.JWT_EXPIRES_IN || '1d' }
-        );
-        setAuthCookie(res, token);
-
-        // Token lives in the httpOnly cookie now, not the response body -
-        // the frontend never needs to see or store it directly.
-        sendSuccess(res, 'Login successful', { user: buildRequestUser(user) });
-
-    } catch (error) {
-        console.error('Login error:', error);
-        sendError(res, 'Login failed', 500);
-    }
+router.post('/login', (req, res) => {
+    clearAuthCookie(res);
+    sendError(res, 'Local password login is disabled. Launch Daily Check-in from Hub.', 410);
 });
 
 // Logout — clears the httpOnly session cookie server-side (the client can't
 // do this itself the way it could with localStorage.removeItem).
 router.post('/logout', (req, res) => {
-    // Read who this actually was BEFORE clearing the cookie - Hub's own
-    // logout cascade (see mws-hub's logoutFromApp) needs to know this so it
-    // doesn't blindly clear whatever DIFFERENT account Hub's own session
-    // currently holds (e.g. a stale Daily Checkin session for one person
-    // sitting alongside a genuinely different, currently-active Hub login).
-    let loggedOutEmail = null;
+    // Read who this was before the cookie goes: the Hub uses the email to end their sessions in the other apps.
+    let email = null;
     try {
         const token = req.cookies?.[COOKIE_NAME];
-        if (token) loggedOutEmail = jwt.verify(token, process.env.JWT_SECRET).email;
+        if (token) email = jwt.verify(token, process.env.JWT_SECRET).email;
     } catch {
-        // expired/invalid token - nothing to attribute, fall through as before
+        // expired or invalid token: nobody to attribute
     }
 
     clearAuthCookie(res);
 
-    // Signing out here should also end the Hub session, otherwise the user
-    // lands back on the hub still logged in and one click re-enters this app.
-    //
-    // Hub's session is a cookie on Hub's domain, so only the browser can
-    // clear it - no server-to-server call can. We hand the client a URL to
-    // navigate to instead of trying to do it from here.
-    const hubBaseUrl = process.env.HUB_BASE_URL;
-    // redirect points back at this app's own landing page instead of
-    // leaving the user on Hub's front page - mws-hub's resolveLogoutRedirect
-    // only allows an origin already registered in its catalog, so this only
-    // works because daily-checkin's own origin is already there.
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174/daily-checkin';
-    // Trailing slash matters here specifically - Vite's dev server serves
-    // this app under a strict base path and errors on the bare (no
-    // trailing slash) form, unlike the /auth/sso handler above which needs
-    // frontendUrl WITHOUT one to avoid a double slash before /auth/callback.
-    const logoutRedirectUrl = `${frontendUrl.replace(/\/$/, '')}/`;
-    const hubLogoutUrl = hubBaseUrl
-        ? `${hubBaseUrl.replace(/\/$/, '')}/auth/logout?redirect=${encodeURIComponent(logoutRedirectUrl)}${loggedOutEmail ? `&email=${encodeURIComponent(loggedOutEmail)}` : ''}`
-        : null;
+    // The client goes to the Hub in the same tab. The Hub ends the sessions elsewhere, keeps its own, and shows
+    // its front page.
+    let hubLogoutUrl = null;
+    try {
+        hubLogoutUrl = hubSso().logoutUrl(email || undefined);
+    } catch {
+        // Hub not configured: nothing to go to
+    }
 
     sendSuccess(res, 'Logged out successfully', hubLogoutUrl ? { hubLogoutUrl } : null);
 });
@@ -257,42 +214,33 @@ router.get('/logout-silent', (req, res) => {
     );
 });
 
-// Back-channel session revocation. Hub calls this directly (server-to-
-// server, not through the user's browser) when signing someone out
-// anywhere - the fan-out iframe (/auth/logout-silent above) depends on the
-// browser actually loading it and third-party cookies not being blocked,
-// neither of which is guaranteed; this bumps sessionVersion instead, which
-// invalidates every already-issued JWT for that email the next time
-// middleware/auth.js's authenticate checks it, regardless of whether the
-// browser ever visits this app again.
+// Back-channel session revocation. Hub calls this directly (server to server) when a person signed out of
+// another app or this application was retired. Bumping sessionVersion invalidates every JWT already issued for
+// them the next time middleware/auth.js checks it, whether or not the browser comes back.
 router.post('/revoke-session', async (req, res) => {
-    if (!process.env.HUB_INTERNAL_SECRET || !verifyHubInternalSecret(req.headers['x-hub-internal-secret'], process.env.HUB_INTERNAL_SECRET)) {
-        return sendError(res, 'Unauthorized', 401);
-    }
-
-    let payload;
+    let sso;
     try {
-        payload = parseHubRevocationPayload(req.body);
-    } catch (error) {
-        if (error instanceof HubInternalRequestVerificationError) return sendError(res, 'email is required', 400);
-        throw error;
+        sso = hubSso();
+    } catch {
+        return sendError(res, 'Hub is not configured', 503);
     }
-
-    // Additive: matching on central_id too (mws-hub sends it alongside
-    // email) means a session still gets revoked even when this app's local
-    // record's email has gone stale relative to what changed centrally
-    // since the person's last login - the same email-staleness class of bug
-    // fixed elsewhere this round.
-    const matchConditions = [{ email: payload.email.trim().toLowerCase() }];
-    if (payload.central_id) matchConditions.push({ centralPersonId: payload.central_id.trim() });
-    const userMatch = matchConditions.length === 1 ? matchConditions[0] : { $or: matchConditions };
-
-    await Promise.all([
-        User.updateOne(userMatch, { $inc: { sessionVersion: 1 } }),
-        UserStudent.updateOne(userMatch, { $inc: { sessionVersion: 1 } })
-    ]);
-
-    sendSuccess(res, 'Session revoked');
+    const result = await sso.revoke.handle({
+        secret: req.headers['x-hub-internal-secret'],
+        body: req.body,
+        apply: async ({ personId, email, all }) => {
+            // Matching central_id too means a session still ends when the email here went stale.
+            const conditions = [];
+            if (email) conditions.push({ email: email.trim().toLowerCase() });
+            if (personId) conditions.push({ centralPersonId: personId.trim() });
+            const userMatch = all ? {} : conditions.length === 1 ? conditions[0] : { $or: conditions };
+            const [employees, students] = await Promise.all([
+                all ? User.updateMany(userMatch, { $inc: { sessionVersion: 1 } }) : User.updateOne(userMatch, { $inc: { sessionVersion: 1 } }),
+                all ? UserStudent.updateMany(userMatch, { $inc: { sessionVersion: 1 } }) : UserStudent.updateOne(userMatch, { $inc: { sessionVersion: 1 } }),
+            ]);
+            return (employees.modifiedCount || 0) + (students.modifiedCount || 0) > 0;
+        },
+    });
+    res.status(result.status).json(result.body);
 });
 
 // Get current user info

@@ -48,7 +48,12 @@ const PORT = process.env.PORT || 3001;
 
 const startServer = async () => {
     try {
-        // Start HTTP server
+        const initialized = await initializeApp();
+        if (!initialized) {
+            throw new Error('Application initialization failed; refusing to accept traffic');
+        }
+
+        // Start HTTP server only after required database indexes and services are ready.
         server.listen(PORT, () => {
             winston.info(`Server running on port ${PORT}`);
             winston.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
@@ -56,17 +61,6 @@ const startServer = async () => {
             winston.info(`Health check: http://localhost:${PORT}/health`);
             winston.info(`Readiness check: http://localhost:${PORT}/ready`);
             winston.info(`FRONTEND_URL: ${process.env.FRONTEND_URL || 'NOT SET (will use localhost:5173)'}`);
-        });
-
-        initializeApp().then((initialized) => {
-            if (initialized) {
-                winston.info('Background initialization completed successfully');
-                return;
-            }
-
-            winston.warn('Background initialization completed with readiness disabled');
-        }).catch((error) => {
-            winston.error('Background initialization crashed:', error);
         });
 
         // Graceful shutdown handling

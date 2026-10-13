@@ -16,6 +16,13 @@ const studentUserSchema = new mongoose.Schema({
         sparse: true,
         trim: true
     },
+    centralEntitlementId: { type: String, unique: true, sparse: true, trim: true },
+    centralEntitlementApplicationId: { type: String, trim: true },
+    centralEntitlementOrganizationId: { type: String, trim: true, index: true },
+    centralEntitlementRole: { type: String, trim: true },
+    centralEntitlementPermissions: [{ type: String, trim: true }],
+    centralEntitlementVersion: { type: Number, min: 0 },
+    centralEntitlementUpdatedAt: { type: Date },
     password: {
         type: String,
         required: function () {

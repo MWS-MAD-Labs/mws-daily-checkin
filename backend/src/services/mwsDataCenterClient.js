@@ -24,6 +24,16 @@ async function lookupEmployeeByEmail(email) {
   }
 }
 
+async function lookupEmployeeByPersonId(personId) {
+  try {
+    const { data } = await client.get("/employees/lookup", { params: { id: personId } });
+    return data.data;
+  } catch (error) {
+    if (error.response?.status === 404 || error.response?.status === 400) return null;
+    throw error;
+  }
+}
+
 // employee_id is the stable identifier - unlike email, it doesn't change
 // when someone updates their address in mws-data-center. Used as a fallback
 // when an already-linked local account's live Google email no longer
@@ -48,6 +58,16 @@ async function lookupStudentByEmail(email) {
     return data.data;
   } catch (error) {
     if (error.response?.status === 404) return null;
+    throw error;
+  }
+}
+
+async function lookupStudentByPersonId(personId) {
+  try {
+    const { data } = await client.get("/students/lookup", { params: { id: personId } });
+    return data.data;
+  } catch (error) {
+    if (error.response?.status === 404 || error.response?.status === 400) return null;
     throw error;
   }
 }
@@ -132,10 +152,12 @@ async function listClassTeacherAssignments() {
 
 module.exports = {
   lookupEmployeeByEmail,
+  lookupEmployeeByPersonId,
   lookupEmployeeByEmployeeId,
   listActiveEmployees,
   listStudentsByStatus,
   lookupStudentByEmail,
+  lookupStudentByPersonId,
   getStudentSupportContacts,
   listClassTeacherAssignments,
 };

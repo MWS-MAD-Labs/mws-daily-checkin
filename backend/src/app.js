@@ -15,6 +15,7 @@ const { createCorsOriginChecker, validateCorsConfiguration } = require('./config
 const employeeRosterSync = require('./jobs/employeeRosterSync');
 const studentRosterSync = require('./jobs/studentRosterSync');
 const classAssignmentSync = require('./jobs/classAssignmentSync');
+const { ensureHubReplayIndexes } = require('./utils/hubReplayStore');
 
 // Import routes
 const routes = require('./routes');
@@ -55,7 +56,12 @@ app.set('trust proxy', 1);
 
 // Security middleware
 app.use(helmet({
-    crossOriginResourcePolicy: { policy: 'cross-origin' }
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    contentSecurityPolicy: {
+        directives: {
+            imgSrc: ["'self'", 'data:', 'blob:', 'https://*.tile.openstreetmap.org', 'https://res.cloudinary.com']
+        }
+    }
 }));
 
 // CORS configuration (explicit allowlist in production)
@@ -134,6 +140,7 @@ const initializeApp = async () => {
 
         // Connect to MongoDB
         await connectDB();
+        await ensureHubReplayIndexes();
 
         // Periodically mirror the active employee roster from mws-data-center,
         // so someone deactivated there gets logged out here too (and a

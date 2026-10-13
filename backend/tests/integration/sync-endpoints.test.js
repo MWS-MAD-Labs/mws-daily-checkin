@@ -1,5 +1,7 @@
 const request = require('supertest');
 const mongoose = require('mongoose');
+const jwt = require('jsonwebtoken');
+const { COOKIE_NAME } = require('../../src/utils/authCookie');
 
 jest.mock('../../src/utils/employeeCentralSync', () => ({
     syncEmployeeFromCentral: jest.fn().mockResolvedValue({
@@ -45,14 +47,28 @@ describe('Manual Sync Now endpoints', () => {
         syncStudentRoster.mockResolvedValue({ checked: 10, updated: 2, deactivated: 0, skipped: false });
         syncEmployeeRoster.mockResolvedValue({ checked: 5, updated: 1, deactivated: 0, roleDriftDetected: 0, skipped: false });
 
-        await User.create({
+        const user = await User.create({
             email: 'sync-test@school.com',
             password: 'password123',
             name: 'Sync Test User',
             role: 'staff',
+            centralEntitlementId: 'ent-sync-test',
+            centralEntitlementApplicationId: 'daily-checkin',
+            centralEntitlementOrganizationId: 'org-test',
+            centralEntitlementRole: 'operator',
+            centralEntitlementPermissions: ['sync.read', 'sync.run'],
+            centralEntitlementVersion: 1,
         });
         agent = request.agent(app);
-        await agent.post('/auth/login').send({ email: 'sync-test@school.com', password: 'password123' });
+        const token = jwt.sign({
+            userId: user._id,
+            role: user.role,
+            sessionVersion: user.sessionVersion,
+            entitlementId: user.centralEntitlementId,
+            entitlementVersion: user.centralEntitlementVersion,
+            entitlementOrganizationId: user.centralEntitlementOrganizationId,
+        }, process.env.JWT_SECRET, { expiresIn: '15m' });
+        agent.jar.setCookie(`${COOKIE_NAME}=${token}`);
     });
 
     it('reports no run yet when nobody has ever triggered a sync', async () => {
