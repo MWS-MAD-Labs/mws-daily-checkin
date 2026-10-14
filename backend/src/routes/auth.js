@@ -10,6 +10,13 @@ const { buildRequestUser } = require('../middleware/auth');
 // request is checked against it (middleware/auth.js), and the page keeps it fresh (see frontend keepFresh).
 // So this app has no sign-in, sign-out or session-revocation routes: signing out of the Hub signs out of every app.
 
+// Where the Hub's card opens Daily Check-in. There is nothing to sign in to: the Hub's session is read from its
+// cookie by the pages and the API. This only sends the browser to the app.
+router.get('/sso', (req, res) => {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174/daily-checkin';
+    res.redirect(`${frontendUrl.replace(/\/$/, '')}/`);
+});
+
 // Get current user info
 router.get('/me', require('../middleware/auth').authenticate, async (req, res) => {
     try {

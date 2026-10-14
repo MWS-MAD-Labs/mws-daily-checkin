@@ -48,11 +48,19 @@ describe('Authentication API', () => {
         });
     });
 
+    describe('GET /auth/sso (where the Hub card opens the app)', () => {
+        it('sends the browser to the frontend, with no code to handle', async () => {
+            process.env.FRONTEND_URL = 'http://localhost:5174/daily-checkin';
+            const response = await request(app).get('/auth/sso?code=ignored');
+            expect(response.status).toBe(302);
+            expect(response.headers.location).toBe('http://localhost:5174/daily-checkin/');
+        });
+    });
+
     describe('routes that belonged to the old sign-in', () => {
         it.each([
             ['post', '/auth/login'],
             ['post', '/auth/logout'],
-            ['get', '/auth/sso'],
             ['get', '/auth/hub-launch'],
             ['get', '/auth/logout-silent'],
             ['post', '/auth/revoke-session'],
