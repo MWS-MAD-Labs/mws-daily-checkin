@@ -1,3 +1,9 @@
+> **Update (shared session).** Daily Check-in no longer has its own sign-in, sign-out or session. It reads the Hub's
+> shared session (an access token in a cookie on the parent domain, see the Hub README) and asks Central what the person
+> may do here. The settings that belonged to the old relay flow (`HUB_INTERNAL_SECRET`, `HUB_SSO_PUBLIC_KEY`,
+> `HUB_STATE_COOKIE_PATH`, `HUB_REPLAY_STORE`, `HUB_SSO_JWKS_URL`) are not used any more; `HUB_BASE_URL`,
+> `CENTRAL_ORGANIZATION_ID` and the Central API settings are. The entitlement rules below still apply.
+
 # Central Entitlement Rollout
 
 Daily Check-in is a single-tenant, Hub-only application. Hub relay tokens must contain a signed `entitlement` object with `id`, `application_id`, `organization_id`, `role`, `permissions`, and `version`. The application id must be `daily-checkin`; the organization must equal `CENTRAL_ORGANIZATION_ID` (the older `CENTRAL_ENTITLEMENT_ORGANIZATION_ID` is still read).

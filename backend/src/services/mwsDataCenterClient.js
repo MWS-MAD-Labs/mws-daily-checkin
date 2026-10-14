@@ -150,7 +150,22 @@ async function listClassTeacherAssignments() {
   return assignments;
 }
 
+// What Central says this person may do in Daily Check-in (role, permissions, whether it is active), or null when it
+// has nothing for them. A retired application gives nobody access.
+async function lookupApplicationEntitlement(personId) {
+  try {
+    const { data } = await client.get("/application-entitlements/lookup", {
+      params: { person_id: personId, application_id: "daily-checkin" },
+    });
+    return data.data ?? null;
+  } catch (error) {
+    if (error.response?.status === 403 && error.response?.data?.code === "application_retired") return null;
+    throw error;
+  }
+}
+
 module.exports = {
+  lookupApplicationEntitlement,
   lookupEmployeeByEmail,
   lookupEmployeeByPersonId,
   lookupEmployeeByEmployeeId,

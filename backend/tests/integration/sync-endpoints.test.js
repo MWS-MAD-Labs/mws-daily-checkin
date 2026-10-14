@@ -1,8 +1,9 @@
 const request = require('supertest');
 const mongoose = require('mongoose');
-const jwt = require('jsonwebtoken');
-const { COOKIE_NAME } = require('../../src/utils/authCookie');
+const { cookieFor } = require('../helpers/hubTestSession');
 
+jest.mock('../../src/utils/hubSession', () => require('../helpers/hubTestSession').hubSessionModule);
+jest.mock('../../src/utils/hubSessionUser', () => require('../helpers/hubTestSession').hubSessionUserModule);
 jest.mock('../../src/utils/employeeCentralSync', () => ({
     syncEmployeeFromCentral: jest.fn().mockResolvedValue({
         name: 'Test User',
@@ -52,6 +53,7 @@ describe('Manual Sync Now endpoints', () => {
             password: 'password123',
             name: 'Sync Test User',
             role: 'staff',
+            centralPersonId: 'sync-person',
             centralEntitlementId: 'ent-sync-test',
             centralEntitlementApplicationId: 'daily-checkin',
             centralEntitlementOrganizationId: 'org-test',
@@ -60,15 +62,7 @@ describe('Manual Sync Now endpoints', () => {
             centralEntitlementVersion: 1,
         });
         agent = request.agent(app);
-        const token = jwt.sign({
-            userId: user._id,
-            role: user.role,
-            sessionVersion: user.sessionVersion,
-            entitlementId: user.centralEntitlementId,
-            entitlementVersion: user.centralEntitlementVersion,
-            entitlementOrganizationId: user.centralEntitlementOrganizationId,
-        }, process.env.JWT_SECRET, { expiresIn: '15m' });
-        agent.jar.setCookie(`${COOKIE_NAME}=${token}`);
+        agent.jar.setCookie(cookieFor('sync-person'));
     });
 
     it('reports no run yet when nobody has ever triggered a sync', async () => {

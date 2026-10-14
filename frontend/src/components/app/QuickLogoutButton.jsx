@@ -9,7 +9,7 @@ import { memo, useState, useCallback, useRef, useEffect } from "react";
 import { ExternalLink, LogOut, Moon, RefreshCw, Sun, User } from "lucide-react";
 import { useSelector, useDispatch } from "react-redux";
 import { useNavigate, useLocation } from "react-router-dom";
-import { logoutUser } from "@/store/slices/authSlice";
+import { leaveToHub } from "@/store/slices/authSlice";
 import { applyThemePreference, emitThemeSpell, persistTheme } from "@/lib/theme";
 import { goToHubSupport, hasSupportHubAccess } from "@/utils/hubConfig";
 import { useToast } from "@/components/ui/use-toast";
@@ -66,7 +66,6 @@ const QuickMenu = memo(() => {
     const { toast } = useToast();
 
     const [isOpen, setIsOpen] = useState(false);
-    const [confirming, setConfirming] = useState(false);
     const [loading, setLoading] = useState(false);
     const [isDark, setIsDark] = useState(getIsDark);
     const [syncing, setSyncing] = useState(false);
@@ -80,7 +79,6 @@ const QuickMenu = memo(() => {
     const line3 = useRef(null);
     const itemsRef = useRef([]);
     const burgerTl = useRef(null);
-    const confirmTimer = useRef(null);
     const lastSyncStatusFetchAt = useRef(0);
 
     /* sync dark state when theme changes externally */
@@ -155,7 +153,6 @@ const QuickMenu = memo(() => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [location.pathname]);
 
-    useEffect(() => () => clearTimeout(confirmTimer.current), []);
 
     /* Prime the cooldown state when the menu is actually opened, not on
        mount - firing this the instant isAuthenticated flips true raced the
@@ -199,8 +196,6 @@ const QuickMenu = memo(() => {
        after logout) — prevents stale "Signing out…" from a previous session */
     useEffect(() => {
         setLoading(false);
-        setConfirming(false);
-        clearTimeout(confirmTimer.current);
     }, [user?.email]);
 
     /* Nav item click */
@@ -286,38 +281,11 @@ const QuickMenu = memo(() => {
         });
     }, [isDark]);
 
-    /* Logout */
-    const handleLogout = useCallback((e) => {
-        if (!confirming) {
-            setConfirming(true);
-            confirmTimer.current = setTimeout(() => setConfirming(false), 3000);
-            animate(e.currentTarget, {
-                translateX: [-5, 5, -4, 4, 0],
-                duration: 320,
-                ease: "inOutSine",
-            });
-            return;
-        }
+    /* Back to the Hub. Signing out lives there: it signs out of every app at once. */
+    const handleBackToHub = useCallback(() => {
         setLoading(true);
-        dispatch(logoutUser())
-            .unwrap()
-            .then((result) => {
-                // If a Hub redirect is already navigating the tab away,
-                // don't also push a local route - that races the Hub nav.
-                // window.location.assign, not navigate("/") - under this
-                // app's basename, react-router resolves bare "/" to the base
-                // path WITHOUT a trailing slash, which a reload sends
-                // straight into Vite's dev server (or a strict-prefix static
-                // host) rejecting it before the SPA loads. BASE_URL always
-                // ends in "/".
-                if (!result?.redirectedToHub) window.location.assign(import.meta.env.BASE_URL);
-            })
-            .catch(() => window.location.assign(import.meta.env.BASE_URL))
-            .finally(() => {
-                setLoading(false);
-                setConfirming(false);
-            });
-    }, [confirming, dispatch]);
+        dispatch(leaveToHub()).finally(() => setLoading(false));
+    }, [dispatch]);
 
     if (!isAuthenticated) return null;
 
@@ -447,8 +415,8 @@ const QuickMenu = memo(() => {
                         <button
                             ref={(el) => (itemsRef.current[idx++] = el)}
                             type="button"
-                            className={`qm-item qm-item--btn${confirming ? " qm-item--danger" : ""}`}
-                            onClick={handleLogout}
+                            className="qm-item qm-item--btn"
+                            onClick={handleBackToHub}
                             role="menuitem"
                             disabled={loading}
                         >
@@ -460,9 +428,11 @@ const QuickMenu = memo(() => {
                                 />
                             </div>
                             <span className="qm-item-label">
-                                {loading ? "Signing out…" : confirming ? "Tap again to confirm" : "Log Out"}
+                                {loading ? "Opening the Hub…" : "Back to Hub"}
                             </span>
-                        </button>
+                            <span className="qm-item-meta">→</span>
+                        </button>;
+                        })()}
                     </div>
                 </div>
             )}

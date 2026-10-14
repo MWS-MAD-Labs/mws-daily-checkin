@@ -1,14 +1,8 @@
-import { memo, useCallback, useEffect, useState } from "react";
-import { useDispatch } from "react-redux";
-import { useNavigate } from "react-router-dom";
-import { useToast } from "../ui/use-toast";
+import { memo } from "react";
 import HeroAuthCard from "@/components/ui/HeroAuthCard";
 import Logo from "./Millennia.webp";
 import { Sparkles, ShieldCheck, Smartphone } from "lucide-react";
-import { getHubBaseUrl } from "@/utils/hubConfig";
-import { attemptSilentHubLogin } from "@/utils/hubSilentLogin";
-import { fetchCurrentUser } from "@/store/slices/authSlice";
-import { consumePendingRedirect, getDefaultPostLoginPath } from "@/utils/authRedirect";
+import useHubSignIn from "@/hooks/useHubSignIn";
 
 const FEATURES = [
   { icon: '🧠', label: 'AI Emotional Wellness' },
@@ -23,82 +17,9 @@ const TRUST = [
   { icon: Smartphone, text: 'PWA Ready' },
 ];
 
-// Codes set by backend redirects (auth.js's /auth/sso Hub relay handoff) -
-// none of these were surfaced to the user before, they just landed back
-// here silently.
-const OAUTH_ERROR_MESSAGES = {
-  sso_missing_token: 'Sign-in link was missing its token. Please try again from Hub.',
-  sso_invalid_token: 'Sign-in link was invalid or expired. Please try again from Hub.',
-  account_inactive: 'Your account has been deactivated. Contact an administrator.',
-  sso_central_lookup_failed: "Couldn't verify your account with the central database. Please try again shortly.",
-  sso_failed: 'Sign-in failed while completing the handoff. Please try again.',
-};
-
 const HeroSection = memo(() => {
-  const { toast } = useToast();
-  const dispatch = useDispatch();
-  const navigate = useNavigate();
-  const [isCheckingHub, setIsCheckingHub] = useState(false);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const errorCode = params.get("error");
-    if (!errorCode) return;
-
-    toast({
-      title: "Sign-in failed",
-      description: OAUTH_ERROR_MESSAGES[errorCode] || "Something went wrong signing in. Please try again.",
-      variant: "destructive",
-    });
-
-    params.delete("error");
-    const query = params.toString();
-    window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
-  }, [toast]);
-
-  const handleGoogleSignIn = useCallback(async () => {
-    // Hub is the single SSO entry point - it authenticates with Google
-    // itself and relays a signed token here, rather than this app running
-    // its own separate Google OAuth flow.
-    const hubBaseUrl = await getHubBaseUrl();
-    const resolvedHubBaseUrl = hubBaseUrl || "http://localhost:5175";
-
-    // Try a silent relogin first (hidden iframe through the same relay a
-    // visible click-through uses) - if Hub's own session is still valid,
-    // this logs the user in without ever bouncing them to Hub's login
-    // screen. Only falls through to the full redirect when Hub genuinely
-    // has no session of its own to hand back.
-    setIsCheckingHub(true);
-    try {
-      const result = await attemptSilentHubLogin(resolvedHubBaseUrl, "daily-checkin");
-
-      if (result.status === "success") {
-        const action = await dispatch(fetchCurrentUser());
-        if (fetchCurrentUser.fulfilled.match(action)) {
-          const userData = action.payload?.user || action.payload?.data?.user;
-          const pendingRedirect = consumePendingRedirect();
-          navigate(pendingRedirect || getDefaultPostLoginPath(userData), { replace: true });
-          return;
-        }
-        // Success signal fired but /auth/me still disagrees - fall through
-        // to the full redirect below, same as a timeout.
-      } else if (result.status === "error") {
-        // Hub is logged in but refused this launch for a specific reason
-        // (no access, maintenance, etc) - show that here instead of
-        // bouncing to Hub's own tab just to display the same message there.
-        toast({
-          title: result.title,
-          description: result.description,
-          variant: "destructive",
-        });
-        return;
-      }
-    } finally {
-      setIsCheckingHub(false);
-    }
-
-    window.location.href = `${resolvedHubBaseUrl}/apps/daily-checkin/launch`;
-  }, [dispatch, navigate, toast]);
+  // A visit without a session goes to the Hub, which gives it back when the person still has one.
+  const { handleHubSignIn, isCheckingHub } = useHubSignIn({ redirectToHub: true });
 
   return (
     <section className="landing-pointer-shell relative min-h-screen flex items-center justify-center px-4 py-10 md:py-16">
@@ -152,7 +73,7 @@ const HeroSection = memo(() => {
         {/* Right — Auth Card */}
         <div className="landing-gsap-card flex justify-center lg:justify-end" data-landing-depth="10">
           <div className="w-full max-w-md">
-            <HeroAuthCard onGoogleSignIn={handleGoogleSignIn} isCheckingHub={isCheckingHub} />
+            <HeroAuthCard onGoogleSignIn={handleHubSignIn} isCheckingHub={isCheckingHub} />
           </div>
         </div>
       </div>

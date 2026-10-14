@@ -1,9 +1,8 @@
-const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const UserStudent = require('../models/UserStudent');
 const { sendError } = require('../utils/response');
-const { COOKIE_NAME } = require('../utils/authCookie');
-const { expectedOrganizationId } = require('../utils/centralEntitlement');
+const { hubSession } = require('../utils/hubSession');
+const { resolveSessionUser } = require('../utils/hubSessionUser');
 const {
     buildDashboardAccessProfile,
     buildMtssAccessProfile,
@@ -49,79 +48,31 @@ const buildRequestUser = (user) => {
     };
 };
 
-const resolveUserByRoleAndId = async (role, userId) => {
-    let user = null;
-    if (role === 'student') {
-        user = await UserStudent.findById(userId);
-    }
-    if (!user) {
-        user = await User.findById(userId);
-    }
-    return user;
-};
-
-// JWT Authentication Middleware
+// Who is making the request: the Hub's access token (a cookie on the parent domain) says who they are, and Central
+// says what they may do in this app. See utils/hubSession.js and utils/hubSessionUser.js.
 const authenticate = async (req, res, next) => {
     try {
-        // Cookie first - the browser's own session, now that the token
-        // lives in an httpOnly cookie instead of localStorage (see
-        // utils/authCookie.js). The Authorization header stays supported
-        // for non-browser callers, like the AI-chat proxy's own outbound
-        // service token.
-        const authHeader = req.headers.authorization;
-        const cookieToken = req.cookies?.[COOKIE_NAME];
-
-        let token;
-        if (cookieToken) {
-            token = cookieToken;
-        } else if (authHeader && authHeader.startsWith('Bearer ')) {
-            token = authHeader.substring(7);
-        } else {
-            return sendError(res, 'Access token required', 401);
+        const claims = await hubSession().fromCookieHeader(req.headers.cookie);
+        if (!claims) {
+            return sendError(res, 'Authentication required', 401);
         }
 
-        // Verify token
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-        // Check if user exists and is active
-        const user = await resolveUserByRoleAndId(decoded.role, decoded.userId);
-        if (!user || !user.isActive) {
-            return sendError(res, 'User not found or inactive', 401);
+        const user = await resolveSessionUser(claims);
+        if (!user) {
+            return sendError(res, 'No access to Daily Check-in', 403);
         }
-
-        // A token minted before this field existed has no sessionVersion
-        // claim at all - treat that as 0 rather than rejecting every
-        // already-issued session the moment this deploys. Mismatch means
-        // Hub's back-channel logout (routes/auth.js's /auth/revoke-session)
-        // bumped the stored value since this token was signed.
-        if ((decoded.sessionVersion || 0) !== (user.sessionVersion || 0)) {
-            return sendError(res, 'Session has been revoked', 401);
-        }
-
-        const organizationId = expectedOrganizationId();
-        const validEntitlement = organizationId
-            && user.centralEntitlementApplicationId === 'daily-checkin'
-            && user.centralEntitlementOrganizationId === organizationId
-            && decoded.entitlementId === user.centralEntitlementId
-            && decoded.entitlementVersion === user.centralEntitlementVersion
-            && decoded.entitlementOrganizationId === user.centralEntitlementOrganizationId;
-        if (!validEntitlement) {
-            return sendError(res, 'Central entitlement is missing, stale, or invalid', 401);
+        if (!user.isActive) {
+            return sendError(res, 'Account is deactivated', 403);
         }
 
         // Attach user to request object
         req.user = buildRequestUser(user);
+        req.hubClaims = claims;
 
         next();
     } catch (error) {
-        if (error.name === 'TokenExpiredError') {
-            return sendError(res, 'Token expired', 401);
-        } else if (error.name === 'JsonWebTokenError') {
-            return sendError(res, 'Invalid token', 401);
-        }
-
-        console.error('Auth middleware error:', error);
-        return sendError(res, 'Authentication failed', 500);
+        console.error('Authentication error:', error.message);
+        return sendError(res, 'Could not verify your access. Try again shortly.', 503);
     }
 };
 

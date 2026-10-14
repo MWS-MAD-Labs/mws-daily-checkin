@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/dialog";
 import ThemeToggle from "@/components/ThemeToggle";
 import { getCheckinHistory, getPersonalDashboard } from "../store/slices/checkinSlice";
-import { logoutUser } from "../store/slices/authSlice";
+import { leaveToHub } from "../store/slices/authSlice";
 import { useToast } from "@/components/ui/use-toast";
 import {
     hasEmotionalDashboardAccess,
@@ -793,10 +793,10 @@ const StudentProfileView = memo(function StudentProfileView({
                         <button
                             type="button"
                             onClick={onOpenLogout}
-                            className="sp-card w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-white/60 dark:bg-white/[0.04] backdrop-blur-sm border border-rose-200/50 dark:border-rose-500/15 text-rose-600 dark:text-rose-400 hover:bg-rose-50/80 dark:hover:bg-rose-500/10 hover:shadow-md transition-all duration-200 text-sm font-extrabold"
+                            className="sp-card w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-white/60 dark:bg-white/[0.04] backdrop-blur-sm border border-border/50 text-foreground hover:bg-card/80 hover:shadow-md transition-all duration-200 text-sm font-extrabold"
                         >
                             <LogOut className="w-4 h-4" />
-                            Sign Out
+                            Back to the Hub
                         </button>
                     </motion.div>
 
@@ -1100,23 +1100,9 @@ const ProfilePage = memo(function ProfilePage() {
         ];
     }, [user.completed, currentUser, dashboardRole, delegatedDashboardAccess, delegatedDashboardDetails, canAccessDashboard]);
 
-    // Logout handler
-    const handleLogout = async () => {
-        try {
-            const result = await dispatch(logoutUser()).unwrap();
-            // If a Hub redirect is already navigating the tab away, don't
-            // also push a local route - that races the Hub nav.
-            // window.location.assign, not navigate("/") - under this app's
-            // basename, react-router resolves bare "/" to the base path
-            // WITHOUT a trailing slash, which a reload sends straight into
-            // Vite's dev server (or a strict-prefix static host) rejecting
-            // it before the SPA loads. BASE_URL always ends in "/".
-            if (!result?.redirectedToHub) window.location.assign(import.meta.env.BASE_URL);
-        } catch (error) {
-            console.error('Logout failed:', error);
-            // Still navigate to landing page even if logout API fails
-            window.location.assign(import.meta.env.BASE_URL);
-        }
+    // Signing out lives in the Hub, where one sign-out covers every app.
+    const handleBackToHub = () => {
+        dispatch(leaveToHub());
     };
 
     const handleStudentBack = useCallback(() => {
@@ -1150,11 +1136,11 @@ const ProfilePage = memo(function ProfilePage() {
                         <GlassCard variant="elevated" className="p-6 border-0 shadow-glass-lg">
                             <DialogHeader className="space-y-3">
                                 <DialogTitle className="text-lg font-semibold text-foreground flex items-center gap-2">
-                                    <LogOut className="h-5 w-5 text-destructive" />
-                                    Sign Out
+                                    <LogOut className="h-5 w-5 text-primary" />
+                                    Back to the Hub
                                 </DialogTitle>
                                 <DialogDescription className="text-foreground/70 leading-relaxed">
-                                    Are you sure you want to sign out? You can log in again anytime.
+                                    Signing out happens in the Hub, and it signs you out of every app at once. Open the Hub to continue.
                                 </DialogDescription>
                             </DialogHeader>
                             <DialogFooter className="flex gap-3 mt-6">
@@ -1166,11 +1152,10 @@ const ProfilePage = memo(function ProfilePage() {
                                     Cancel
                                 </Button>
                                 <Button
-                                    variant="destructive"
-                                    onClick={handleLogout}
-                                    className="flex-1 bg-destructive hover:bg-destructive/90 text-primary"
+                                    onClick={handleBackToHub}
+                                    className="flex-1"
                                 >
-                                    Sign Out
+                                    Open the Hub
                                 </Button>
                             </DialogFooter>
                         </GlassCard>
@@ -1564,11 +1549,11 @@ const ProfilePage = memo(function ProfilePage() {
                             <button
                                 type="button"
                                 onClick={() => setShowLogoutDialog(true)}
-                                className="w-full rounded-xl bg-destructive/90 px-4 py-3 text-sm font-semibold text-destructive-foreground shadow-sm transition-all duration-300 hover:bg-destructive hover:shadow-glass-sm focus:ring-2 focus:ring-destructive/50"
+                                className="w-full rounded-xl bg-primary/90 px-4 py-3 text-sm font-semibold text-primary-foreground shadow-sm transition-all duration-300 hover:bg-primary hover:shadow-glass-sm focus:ring-2 focus:ring-primary/50"
                             >
                                 <span className="inline-flex items-center gap-2 justify-center">
                                     <LogOut className="h-4 w-4" />
-                                    Sign Out
+                                    Back to the Hub
                                 </span>
                             </button>
                         </motion.div>
@@ -1587,11 +1572,11 @@ const ProfilePage = memo(function ProfilePage() {
                     <GlassCard variant="elevated" className="p-6 border-0 shadow-glass-lg">
                         <DialogHeader className="space-y-3">
                             <DialogTitle className="text-lg font-semibold text-foreground flex items-center gap-2">
-                                <LogOut className="h-5 w-5 text-destructive" />
-                                Sign Out
+                                <LogOut className="h-5 w-5 text-primary" />
+                                Back to the Hub
                             </DialogTitle>
                             <DialogDescription className="text-foreground/70 leading-relaxed">
-                                Are you sure you want to sign out of MWS APP? You'll need to sign in again to access your account.
+                                Signing out happens in the Hub, and it signs you out of every app at once. Open the Hub to continue.
                             </DialogDescription>
                         </DialogHeader>
                         <DialogFooter className="flex gap-3 mt-6">
@@ -1603,11 +1588,10 @@ const ProfilePage = memo(function ProfilePage() {
                                 Cancel
                             </Button>
                             <Button
-                                variant="destructive"
-                                onClick={handleLogout}
-                                className="flex-1 bg-destructive hover:bg-destructive/90 text-primary"
+                                onClick={handleBackToHub}
+                                className="flex-1"
                             >
-                                Sign Out
+                                Open the Hub
                             </Button>
                         </DialogFooter>
                     </GlassCard>

@@ -1,6 +1,4 @@
 const { validateEntitlement, applyEntitlementProjection } = require('../../src/utils/centralEntitlement');
-const HubRelayReplay = require('../../src/models/HubRelayReplay');
-const { AtomicInMemoryReplayStore, ensureHubReplayIndexes } = require('../../src/utils/hubReplayStore');
 const { requirePermission, requireAnyPermission } = require('../../src/middleware/auth');
 const { validateBackfillRecord, assertNoEntitlementRollback } = require('../../src/scripts/backfillCentralEntitlements');
 
@@ -40,22 +38,6 @@ describe('Central entitlement authorization', () => {
         expect(user.sessionVersion).toBe(5);
         expect(applyEntitlementProjection(user, valid)).toBe(false);
         expect(user.sessionVersion).toBe(5);
-    });
-
-    test('atomically rejects an in-process replay', () => {
-        const store = new AtomicInMemoryReplayStore();
-        expect(store.consume('jti-1', 120)).toBe(true);
-        expect(store.consume('jti-1', 120)).toBe(false);
-    });
-
-    test('initializes Mongo replay indexes before traffic', async () => {
-        const previous = process.env.HUB_REPLAY_STORE;
-        process.env.HUB_REPLAY_STORE = 'mongo';
-        const init = jest.spyOn(HubRelayReplay, 'createIndexes').mockResolvedValue([]);
-        await expect(ensureHubReplayIndexes()).resolves.toBeUndefined();
-        expect(init).toHaveBeenCalledTimes(1);
-        init.mockRestore();
-        process.env.HUB_REPLAY_STORE = previous;
     });
 
     test('backfill rejects missing or unknown source and entitlement rollback', () => {

@@ -5,6 +5,7 @@ import AppHelmet from '@/components/app/AppHelmet';
 import RouteConfig from '@/components/app/RouteConfig';
 import { useCrossTabAuthSync } from '@/hooks/useCrossTabAuthSync';
 import { useSessionRecheck } from '@/hooks/useSessionRecheck';
+import { useHubSessionKeeper } from '@/hooks/useHubSessionKeeper';
 import { resolveRouteVisualPolicy } from '@/utils/routeVisualPolicy';
 
 const BackgroundDecor = lazy(() => import('@/components/app/BackgroundDecor'));
@@ -21,6 +22,7 @@ const App = memo(() => {
 
     useCrossTabAuthSync();
     useSessionRecheck();
+    useHubSessionKeeper();
 
     useEffect(() => {
         let isDisposed = false;
