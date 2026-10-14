@@ -15,14 +15,14 @@ const ProtectedRoute = ({
     requireDirectorateAcademic = false,
     accessMatch = 'all',
 }) => {
-    const { user, isAuthenticated, loading, noAccess } = useSelector((state) => state.auth);
+    const { user, isAuthenticated, loading, noAccess, leaving } = useSelector((state) => state.auth);
     const userRole = normalizeRole(user?.role);
 
     // Role-aware fallback: students -> student hub, everyone else -> home
     // (/home, which has its own link out to the real Hub)
     const fallbackPath = userRole === 'student' ? '/student/support-hub' : '/home';
 
-    const shouldBounceToHub = !loading && !isAuthenticated && !noAccess;
+    const shouldBounceToHub = !loading && !isAuthenticated && !noAccess && !leaving;
 
     // No Hub session: the Hub gives it back when the person still has one, or shows its front page.
     useEffect(() => {

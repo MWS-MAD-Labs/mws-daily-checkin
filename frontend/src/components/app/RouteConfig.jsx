@@ -5,8 +5,8 @@ import PageLoader from "@/components/PageLoader";
 import PageTransition from "./PageTransition";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { useSelector } from "react-redux";
+import RootRedirect from "./RootRedirect";
 
-const LandingPage = lazy(() => import(/* webpackPrefetch: true */ '@/pages/LandingPage'));
 const AccountNotFoundPage = lazy(() => import(/* webpackPrefetch: true */ '@/pages/AccountNotFoundPage'));
 const EmotionalCheckinFaceScanPage = lazy(() => import('@/pages/VerificationPage'));
 const ProfilePage = lazy(() => import(/* webpackPrefetch: true */ '@/pages/ProfilePage'));
@@ -65,7 +65,7 @@ const AdminProtectedRoute = memo(({ children }) => {
 AdminProtectedRoute.displayName = 'AdminProtectedRoute';
 
 const publicRoutes = [
-    <Route key="landing" path="/" element={<MemoizedPageTransition><LandingPage /></MemoizedPageTransition>} />,
+    <Route key="landing" path="/" element={<RootRedirect />} />,
     <Route key="account-not-found" path="/account-not-found" element={<MemoizedPageTransition><AccountNotFoundPage /></MemoizedPageTransition>} />,
     <Route key="face-scan" path="/emotional-checkin/face-scan" element={<MemoizedPageTransition><EmotionalCheckinFaceScanPage /></MemoizedPageTransition>} />,
     // This is now nested inside the app-level /daily-checkin basename

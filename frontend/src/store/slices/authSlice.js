@@ -3,9 +3,10 @@ import { getCurrentUser } from '../../services/authService';
 import { goToHubHome } from '@/utils/hubSession';
 import { clearStoredAuthSession, setStoredAuthSession, setStoredAuthUser } from '@/utils/authStorage';
 
-// There is no sign-out here: the Hub owns it. This clears what this tab holds and goes to the Hub front page.
+// There is no sign-out here: the Hub owns it. This goes to the Hub front page and leaves the page as it is.
 export const leaveToHub = createAsyncThunk('auth/leaveToHub', async () => {
-    await goToHubHome();
+    // False when the Hub address is not known, then the person stays here.
+    return goToHubHome();
 });
 
 export const fetchCurrentUser = createAsyncThunk(
@@ -34,6 +35,8 @@ const initialState = {
     isAuthenticated: false,
     // The Hub knows the person but Central gave them no access to this app.
     noAccess: false,
+    // On the way to the Hub: the page must not treat the missing session as a reason to ask the Hub for it back.
+    leaving: false,
 };
 
 // Slice
@@ -65,11 +68,12 @@ const authSlice = createSlice({
     },
     extraReducers: (builder) => {
         builder
-            .addCase(leaveToHub.fulfilled, (state) => {
-                state.user = null;
-                state.isAuthenticated = false;
-                state.error = null;
-                clearStoredAuthSession();
+            .addCase(leaveToHub.pending, (state) => {
+                state.leaving = true;
+            })
+            // The page is being left, so what it holds stays until it is gone.
+            .addCase(leaveToHub.fulfilled, (state, action) => {
+                state.leaving = action.payload !== false;
             })
             // Fetch current user
             .addCase(fetchCurrentUser.pending, (state) => {
