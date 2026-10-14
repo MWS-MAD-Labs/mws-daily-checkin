@@ -76,8 +76,10 @@ const authSlice = createSlice({
                 state.leaving = action.payload !== false;
             })
             // Fetch current user
+            // Asking again while someone is signed in (the tab came back into view) happens quietly. Only the first
+            // check shows the loader, otherwise the page under it is taken apart and what was typed is lost.
             .addCase(fetchCurrentUser.pending, (state) => {
-                state.loading = true;
+                state.loading = !state.isAuthenticated;
             })
             .addCase(fetchCurrentUser.fulfilled, (state, action) => {
                 state.loading = false;
