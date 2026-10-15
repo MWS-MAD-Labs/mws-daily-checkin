@@ -1,4 +1,4 @@
-import React, { memo, useState } from "react";
+import React, { memo } from "react";
 import { motion } from "framer-motion";
 import {
     X,
@@ -19,10 +19,8 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import OrganizationAssignmentModal from "./OrganizationAssignmentModal";
 
 const UserDetailsModal = memo(({ user, onClose }) => {
-    const [showOrganizationModal, setShowOrganizationModal] = useState(false);
 
     if (!user) return null;
 
@@ -385,35 +383,6 @@ const UserDetailsModal = memo(({ user, onClose }) => {
                             </div>
                         )}
 
-                        {/* Organization Assignment */}
-                        {(user.role === "teacher" ||
-                            user.role === "se_teacher" ||
-                            user.role === "head_unit" ||
-                            user.role === "student") && (
-                                <div className="space-y-4">
-                                    <h3 className="text-lg font-semibold flex items-center">
-                                        <Users className="w-4 h-4 mr-2" />
-                                        Organization Assignments
-                                    </h3>
-                                    <div className="p-4 bg-muted/30 rounded-lg">
-                                        <p className="text-sm text-muted-foreground mb-3">
-                                            {user.role === "teacher" || user.role === "se_teacher"
-                                                ? "Manage this teacher's class assignments, subjects, and homeroom responsibilities."
-                                                : user.role === "head_unit"
-                                                    ? "View and manage department members under this head unit's supervision."
-                                                    : "View this student's class assignments and academic group memberships."}
-                                        </p>
-                                        <Button
-                                            onClick={() => setShowOrganizationModal(true)}
-                                            className="w-full"
-                                        >
-                                            <Users className="w-4 h-4 mr-2" />
-                                            Manage Assignments
-                                        </Button>
-                                    </div>
-                                </div>
-                            )}
-
                         {/* Actions */}
                         <div className="flex justify-end pt-6 border-t">
                             <Button onClick={onClose}>Close</Button>
@@ -422,12 +391,6 @@ const UserDetailsModal = memo(({ user, onClose }) => {
                 </DialogContent>
             </Dialog>
 
-            {showOrganizationModal && (
-                <OrganizationAssignmentModal
-                    user={user}
-                    onClose={() => setShowOrganizationModal(false)}
-                />
-            )}
         </>
     );
 });

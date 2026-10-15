@@ -1,26 +1,27 @@
 const mongoose = require('mongoose');
-const User = require('../models/User');
-const UserStudent = require('../models/UserStudent');
+const Person = require('../models/Person');
 const EmotionalCheckin = require('../models/EmotionalCheckin');
 const StudentEmotionalCheckin = require('../models/StudentEmotionalCheckin');
 const { buildCheckinUserSnapshot } = require('../utils/checkinIdentity');
+const { SCOPE_MODE, PERSON_TYPE, JOB_KIND } = require('../constants/enums');
+const { staffInScope } = require('../utils/accessScope');
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const STUDENT_DAILY_LIMIT_PER_TYPE = 2;
 const DEFAULT_DAILY_LIMIT_PER_TYPE = 1;
 
-const getCheckinModelForRole = (role) => (
-    role === 'student' ? StudentEmotionalCheckin : EmotionalCheckin
+const getCheckinModelForType = (personType) => (
+    personType === PERSON_TYPE.STUDENT ? StudentEmotionalCheckin : EmotionalCheckin
 );
 
-const getCheckinModelForUser = (user = {}) => getCheckinModelForRole(user?.role);
+const getCheckinModelForUser = (user = {}) => getCheckinModelForType(user?.personType);
 
-const getDailyCheckinLimitByRole = (role) => (
-    role === 'student' ? STUDENT_DAILY_LIMIT_PER_TYPE : DEFAULT_DAILY_LIMIT_PER_TYPE
+const getDailyCheckinLimitByType = (personType) => (
+    personType === PERSON_TYPE.STUDENT ? STUDENT_DAILY_LIMIT_PER_TYPE : DEFAULT_DAILY_LIMIT_PER_TYPE
 );
 
 const getDailyCheckinLimitsForUser = (user = {}) => {
-    const limit = getDailyCheckinLimitByRole(user?.role);
+    const limit = getDailyCheckinLimitByType(user?.personType);
     return {
         manual: limit,
         ai: limit
@@ -383,9 +384,7 @@ const buildGradeRegexFromQuery = (grade = '') => {
 
 const findAnyUserById = async (userId, select) => {
     if (!userId) return null;
-    const student = await UserStudent.findById(userId).select(select);
-    if (student) return student;
-    return User.findById(userId).select(select);
+    return Person.findById(userId).select(select);
 };
 
 const isNoSupportSelection = (value) => {
@@ -798,9 +797,9 @@ const enhanceAIAnalysisWithUserContext = async (aiAnalysis, checkinData) => {
 };
 
 // Update user's emotional patterns for AI learning
-const updateUserEmotionalPatterns = async (userId, aiEmotionScan, userReflection, userRole = null) => {
+const updateUserEmotionalPatterns = async (userId, aiEmotionScan, userReflection, personType = null) => {
     try {
-        const CheckinModel = getCheckinModelForRole(userRole);
+        const CheckinModel = getCheckinModelForType(personType);
 
         if (!aiEmotionScan) return;
 
@@ -1052,7 +1051,7 @@ const submitCheckin = async (req, res) => {
 
         // Update user's emotional patterns for AI learning
         console.log('🧠 Updating user emotional patterns...');
-        await updateUserEmotionalPatterns(checkinData.userId, checkinData.aiEmotionScan, checkinData.userReflection, req.user.role);
+        await updateUserEmotionalPatterns(checkinData.userId, checkinData.aiEmotionScan, checkinData.userReflection, req.user.personType);
         console.log('✅ User emotional patterns updated');
 
         // Create check-in record with AI analysis
@@ -1062,9 +1061,9 @@ const submitCheckin = async (req, res) => {
         });
 
         await checkin.save();
-        const responseUser = await findAnyUserById(checkin.userId, 'name role department');
+        const responseUser = await findAnyUserById(checkin.userId, 'name personType jobKind department');
         const supportContact = checkin.supportContactUserId
-            ? await User.findById(checkin.supportContactUserId).select('name email role department')
+            ? await Person.findById(checkin.supportContactUserId).select('name email personType jobKind department')
             : null;
 
         // Emit real-time update for dashboard and invalidate cache
@@ -1173,7 +1172,7 @@ const getTodayCheckin = async (req, res) => {
         // Populate user name for today's checkin
         const populatedCheckin = await CheckinModel.findById(checkin._id)
             .populate('userId', 'name')
-            .populate('supportContactUserId', 'name role department');
+            .populate('supportContactUserId', 'name personType jobKind department');
 
         let resolvedUser = populatedCheckin.userId;
         if (!resolvedUser) {
@@ -1260,7 +1259,7 @@ const getCheckinResults = async (req, res) => {
         const checkin = await CheckinModel.findOne({
             _id: req.params.id,
             userId: req.user.id
-        }).populate('supportContactUserId', 'name role department');
+        }).populate('supportContactUserId', 'name personType jobKind department');
 
         if (!checkin) {
             return sendError(res, 'Check-in not found', 404);
@@ -1269,7 +1268,7 @@ const getCheckinResults = async (req, res) => {
         // Populate user name for check-in results
         const populatedCheckin = await CheckinModel.findById(checkin._id)
             .populate('userId', 'name')
-            .populate('supportContactUserId', 'name role department');
+            .populate('supportContactUserId', 'name personType jobKind department');
 
         let resolvedUser = populatedCheckin.userId;
         if (!resolvedUser) {
@@ -1288,6 +1287,16 @@ const getCheckinResults = async (req, res) => {
     }
 };
 
+// Another person's history opens only when they fall inside the viewer's dashboard scope.
+const canViewHistoryOf = (viewer, target) => {
+    if (target.personType !== PERSON_TYPE.STUDENT) return staffInScope(viewer.staffDashboardScope, target);
+    const scope = viewer.studentDashboardScope;
+    if (scope.mode === SCOPE_MODE.ALL) return true;
+    if (scope.mode === SCOPE_MODE.UNIT) return target.unit === scope.unit || target.department === scope.unit;
+    if (scope.mode === SCOPE_MODE.ASSIGNED) return studentMatchesTeacherScopes(target, buildTeacherClassScopes(viewer.classes));
+    return false;
+};
+
 // Get check-in history with pagination and optional user filtering for dashboard
 const getCheckinHistory = async (req, res) => {
     try {
@@ -1300,22 +1309,22 @@ const getCheckinHistory = async (req, res) => {
         // Build query - allow filtering by userId with role-based checks
         const query = {};
         const requestedUserId = req.query.userId;
-        let queryRole = req.user.role;
+        let queryType = req.user.personType;
 
         if (requestedUserId) {
             // If requesting another user's data, enforce permissions
-            const isSelf = String(requestedUserId) === String(req.user.id);
-            const elevated = ['directorate', 'admin', 'superadmin'].includes(req.user.role);
-            const dashboardRole = ['directorate', 'admin', 'superadmin', 'head_unit', 'teacher', 'se_teacher'].includes(req.user.role);
-            if (!isSelf && !elevated && !dashboardRole) {
-                return sendError(res, 'Access denied for this user\'s history', 403);
-            }
             query.$or = [
                 { userId: requestedUserId },
                 { legacyResolvedUserId: requestedUserId }
             ];
-            const requestedUser = await findAnyUserById(requestedUserId, 'role');
-            queryRole = requestedUser?.role || req.user.role;
+            const requestedUser = await findAnyUserById(requestedUserId, 'personType jobKind unit department currentGrade className');
+            if (!requestedUser) {
+                return sendError(res, 'User not found', 404);
+            }
+            if (String(requestedUserId) !== String(req.user.id) && !canViewHistoryOf(req.user, requestedUser)) {
+                return sendError(res, 'Access denied for this user\'s history', 403);
+            }
+            queryType = requestedUser.personType;
         } else {
             // Default to current user's history if no userId specified
             query.$or = [
@@ -1324,7 +1333,7 @@ const getCheckinHistory = async (req, res) => {
             ];
         }
 
-        const CheckinModel = getCheckinModelForRole(queryRole);
+        const CheckinModel = getCheckinModelForType(queryType);
 
         // Add date filtering if provided
         if (req.query.startDate || req.query.endDate) {
@@ -1345,7 +1354,7 @@ const getCheckinHistory = async (req, res) => {
             .sort({ date: -1, submittedAt: -1 })
             .skip(skip)
             .limit(limit)
-            .populate('supportContactUserId', 'name role department');
+            .populate('supportContactUserId', 'name personType jobKind department');
 
         const pagination = getPaginationInfo(page, limit, total);
 
@@ -1355,7 +1364,7 @@ const getCheckinHistory = async (req, res) => {
             checkins.map((c) => String(c.userId)).filter(Boolean)
         )];
         const userLookupResults = await Promise.all(
-            uniqueUserIds.map((uid) => findAnyUserById(uid, 'name email role department unit'))
+            uniqueUserIds.map((uid) => findAnyUserById(uid, 'name email personType jobKind department unit'))
         );
         const userMap = Object.fromEntries(
             uniqueUserIds.map((uid, i) => [uid, userLookupResults[i]])
@@ -1381,9 +1390,10 @@ const getTeacherDailyCheckins = async (req, res) => {
     try {
         const { sendSuccess, sendError } = require('../utils/response');
         const CheckinModel = StudentEmotionalCheckin;
-        const viewerRole = req.user?.role;
-        const isTeacherRole = viewerRole === 'teacher' || viewerRole === 'se_teacher';
-        const isPrincipalView = ['head_unit', 'directorate', 'admin', 'superadmin'].includes(viewerRole);
+        const viewerScope = req.user.studentDashboardScope;
+        const viewerRole = viewerScope.mode;
+        const isTeacherRole = viewerScope.mode === SCOPE_MODE.ASSIGNED;
+        const isPrincipalView = viewerScope.mode === SCOPE_MODE.UNIT || viewerScope.mode === SCOPE_MODE.ALL;
         const requestedGrade = normalizeSpaces(String(req.query.grade || ''));
         const requestedClassName = normalizeSpaces(String(req.query.className || ''));
         const requestedUnit = resolveUnitLabel(req.query.unit || '');
@@ -1413,8 +1423,8 @@ const getTeacherDailyCheckins = async (req, res) => {
                 return sendError(res, 'No classroom assignments found for this teacher', 403);
             }
 
-            const students = await UserStudent.find({
-                role: 'student',
+            const students = await Person.find({
+                personType: PERSON_TYPE.STUDENT,
                 isActive: true
             }).select('name email nickname currentGrade className unit department');
 
@@ -1430,13 +1440,12 @@ const getTeacherDailyCheckins = async (req, res) => {
                     .filter(Boolean)
             ));
         } else if (isPrincipalView) {
-            const viewerUnit = resolveUnitLabel(req.user?.unit || req.user?.department || '');
-            const effectiveUnit = viewerRole === 'head_unit'
-                ? viewerUnit
-                : (requestedUnit || viewerUnit);
+            const effectiveUnit = viewerScope.mode === SCOPE_MODE.UNIT
+                ? resolveUnitLabel(viewerScope.unit)
+                : requestedUnit;
 
             const studentFilter = {
-                role: 'student',
+                personType: PERSON_TYPE.STUDENT,
                 isActive: true
             };
 
@@ -1459,13 +1468,13 @@ const getTeacherDailyCheckins = async (req, res) => {
                 studentFilter.className = new RegExp(escapeRegex(requestedClassName), 'i');
             }
 
-            scopedStudents = await UserStudent.find(studentFilter)
+            scopedStudents = await Person.find(studentFilter)
                 .select('name email nickname currentGrade className unit department');
 
             scopeMeta.unit = effectiveUnit || null;
             scopeMeta.gradeBand = requestedGrade || (effectiveUnit ? getUnitGradeBandLabel(effectiveUnit) : 'All Grades');
         } else {
-            return sendError(res, 'Role is not allowed to access student daily dashboard', 403);
+            return sendError(res, 'No students are open to your dashboard', 403);
         }
 
         scopedStudents.sort((a, b) => {
@@ -1563,8 +1572,7 @@ const getTeacherDailyCheckins = async (req, res) => {
 // Get available support contacts for the current user
 const getAvailableContacts = async (req, res) => {
     try {
-        const userRole = req.user.role;
-        const User = require('../models/User');
+        const userRole = req.user.personType === PERSON_TYPE.STUDENT ? JOB_KIND.STUDENT : req.user.jobKind;
         const { sendSuccess, sendError } = require('../utils/response');
 
         // Define which roles can be contacted based on user's role
@@ -1612,12 +1620,13 @@ const getAvailableContacts = async (req, res) => {
         }
 
         // Get available contacts
-        const contacts = await User.find({
-            role: { $in: contactableRoles },
+        const contacts = await Person.find({
+            personType: PERSON_TYPE.EMPLOYEE,
+            jobKind: { $in: contactableRoles },
             isActive: true,
             _id: { $ne: req.user.id } // Exclude self
         })
-            .select('_id name email role department jobLevel unit jobPosition')
+            .select('_id name email personType jobKind department jobLevel unit jobPosition')
             .sort({ name: 1 });
 
         // Add "No Need" option
@@ -2066,9 +2075,9 @@ const submitAICheckin = async (req, res) => {
         });
 
         await checkin.save();
-        const responseUser = await findAnyUserById(checkin.userId, 'name role department');
+        const responseUser = await findAnyUserById(checkin.userId, 'name personType jobKind department');
         const supportContact = checkin.supportContactUserId
-            ? await User.findById(checkin.supportContactUserId).select('name email role department')
+            ? await Person.findById(checkin.supportContactUserId).select('name email personType jobKind department')
             : null;
 
         // Emit real-time update for dashboard
@@ -2167,10 +2176,10 @@ const getPersonalDashboard = async (req, res) => {
                 userId,
                 date: { $gte: todayStart, $lt: todayEnd }
             })
-                .populate('supportContactUserId', 'name role department unit email')
+                .populate('supportContactUserId', 'name personType jobKind department unit email')
                 .lean(),
             CheckinModel.find({ userId })
-                .populate('supportContactUserId', 'name role department unit')
+                .populate('supportContactUserId', 'name personType jobKind department unit')
                 .sort({ date: -1 })
                 .limit(5)
                 .lean(),

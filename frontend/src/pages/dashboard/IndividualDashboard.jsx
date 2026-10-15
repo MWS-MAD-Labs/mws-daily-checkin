@@ -2,6 +2,8 @@ import { memo, useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { fetchUserById } from "../../store/slices/userSlice";
+import { getDashboardScopeMode } from "@/utils/accessControl";
+import { DASHBOARD, SCOPE_MODE } from "@/constants/enums";
 import IndividualView from "./components/IndividualView";
 import { Card, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
@@ -22,7 +24,7 @@ const IndividualDashboard = memo(() => {
 
     const locationStateUser = location.state?.user;
     const cameFromDashboard = Boolean(location.state?.fromDashboard);
-    const isHeadUnit = currentUser?.role === 'head_unit';
+    const isHeadUnit = getDashboardScopeMode(currentUser, DASHBOARD.STAFF) === SCOPE_MODE.UNIT;
 
     useEffect(() => {
         let isMounted = true;

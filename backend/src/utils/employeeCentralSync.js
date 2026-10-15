@@ -1,4 +1,6 @@
-const { lookupEmployeeByEmail, lookupEmployeeByEmployeeId } = require('../services/mwsDataCenterClient');
+const { PERSON_TYPE } = require('../constants/enums');
+const { deriveJobKind } = require('./jobKind');
+const { lookupEmployeeByEmail, lookupEmployeeByPersonId, lookupEmployeeByEmployeeId } = require('../services/mwsDataCenterClient');
 
 // email is included so callers can tell when a live login email has drifted
 // from what's on file centrally (see syncEmployeeFromCentralWithFallback).
@@ -6,13 +8,21 @@ function mapCentralEmployee(centralEmployee) {
     return {
         name: centralEmployee.full_name,
         email: centralEmployee.email,
+        // Central's Person.id - see the matching note on models/User.js.
+        centralPersonId: centralEmployee.person_id,
         gender: centralEmployee.gender,
         employeeId: centralEmployee.employee_id,
         jobPosition: centralEmployee.job_position,
         jobLevel: centralEmployee.job_level,
         employmentStatus: centralEmployee.employment_type,
         department: centralEmployee.unit,
-        unit: centralEmployee.unit
+        unit: centralEmployee.unit,
+        // Only a label, worked out from Central's job level and position.
+        jobKind: deriveJobKind({
+            personType: PERSON_TYPE.EMPLOYEE,
+            jobLevel: centralEmployee.job_level,
+            jobPosition: centralEmployee.job_position
+        })
     };
 }
 
@@ -20,8 +30,10 @@ function mapCentralEmployee(centralEmployee) {
 // email has no active employee record there (caller should reject login).
 // mws-data-center is the source of truth for unit naming — synced as-is,
 // no local enum gatekeeping it.
-async function syncEmployeeFromCentral(email) {
-    const centralEmployee = await lookupEmployeeByEmail(email);
+async function syncEmployeeFromCentral(email, centralPersonId) {
+    const centralEmployee = centralPersonId
+        ? await lookupEmployeeByPersonId(centralPersonId) || await lookupEmployeeByEmail(email)
+        : await lookupEmployeeByEmail(email);
     if (!centralEmployee) return null;
     return mapCentralEmployee(centralEmployee);
 }
@@ -43,4 +55,4 @@ async function syncEmployeeFromCentralWithFallback(email, existingEmployeeId) {
     return mapCentralEmployee(centralEmployee);
 }
 
-module.exports = { syncEmployeeFromCentral, syncEmployeeFromCentralWithFallback };
+module.exports = { syncEmployeeFromCentral, syncEmployeeFromCentralWithFallback, mapCentralEmployee };

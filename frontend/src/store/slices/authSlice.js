@@ -1,35 +1,13 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { login as loginApi, logout as logoutApi, getCurrentUser } from '../../services/authService';
+import { getCurrentUser } from '../../services/authService';
+import { goToHubHome } from '@/utils/hubSession';
 import { clearStoredAuthSession, setStoredAuthSession, setStoredAuthUser } from '@/utils/authStorage';
 
-// Async thunks
-export const loginUser = createAsyncThunk(
-    'auth/loginUser',
-    async ({ email, password }, { rejectWithValue }) => {
-        try {
-            const response = await loginApi(email, password);
-            // Extract data from the nested response structure
-            const { data } = response.data;
-            return data;
-        } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'Login failed');
-        }
-    }
-);
-
-export const logoutUser = createAsyncThunk(
-    'auth/logoutUser',
-    async (_, { rejectWithValue }) => {
-        try {
-            // { redirectedToHub } tells the caller whether a cross-origin
-            // navigation to Hub is already underway, so it knows whether to
-            // also navigate locally.
-            return await logoutApi();
-        } catch (error) {
-            return rejectWithValue(error.response?.data?.message || 'Logout failed');
-        }
-    }
-);
+// There is no sign-out here: the Hub owns it. This goes to the Hub front page and leaves the page as it is.
+export const leaveToHub = createAsyncThunk('auth/leaveToHub', async () => {
+    // False when the Hub address is not known, then the person stays here.
+    return goToHubHome();
+});
 
 export const fetchCurrentUser = createAsyncThunk(
     'auth/fetchCurrentUser',
@@ -55,6 +33,10 @@ const initialState = {
     loading: false,
     error: null,
     isAuthenticated: false,
+    // The Hub knows the person but Central gave them no access to this app.
+    noAccess: false,
+    // On the way to the Hub: the page must not treat the missing session as a reason to ask the Hub for it back.
+    leaving: false,
 };
 
 // Slice
@@ -86,51 +68,25 @@ const authSlice = createSlice({
     },
     extraReducers: (builder) => {
         builder
-            // Login
-            .addCase(loginUser.pending, (state) => {
-                state.loading = true;
-                state.error = null;
+            .addCase(leaveToHub.pending, (state) => {
+                state.leaving = true;
             })
-            .addCase(loginUser.fulfilled, (state, action) => {
-                state.loading = false;
-                state.user = action.payload.user;
-                state.isAuthenticated = true;
-                state.error = null;
-                setStoredAuthSession(action.payload);
-            })
-            .addCase(loginUser.rejected, (state, action) => {
-                state.loading = false;
-                state.error = action.payload;
-                state.isAuthenticated = false;
-            })
-            // Logout
-            .addCase(logoutUser.pending, (state) => {
-                state.loading = true;
-            })
-            .addCase(logoutUser.fulfilled, (state) => {
-                state.loading = false;
-                state.user = null;
-                state.isAuthenticated = false;
-                state.error = null;
-                clearStoredAuthSession();
-            })
-            .addCase(logoutUser.rejected, (state, action) => {
-                state.loading = false;
-                state.error = action.payload;
-                // Still clear auth state even if logout API fails
-                state.user = null;
-                state.isAuthenticated = false;
-                clearStoredAuthSession();
+            // The page is being left, so what it holds stays until it is gone.
+            .addCase(leaveToHub.fulfilled, (state, action) => {
+                state.leaving = action.payload !== false;
             })
             // Fetch current user
+            // Asking again while someone is signed in (the tab came back into view) happens quietly. Only the first
+            // check shows the loader, otherwise the page under it is taken apart and what was typed is lost.
             .addCase(fetchCurrentUser.pending, (state) => {
-                state.loading = true;
+                state.loading = !state.isAuthenticated;
             })
             .addCase(fetchCurrentUser.fulfilled, (state, action) => {
                 state.loading = false;
                 const userData = action.payload?.user || action.payload?.data?.user;
                 state.user = userData || null;
                 state.isAuthenticated = !!userData;
+                state.noAccess = false;
                 state.error = null;
                 if (userData) {
                     setStoredAuthUser(userData);
@@ -142,6 +98,7 @@ const authSlice = createSlice({
                 const message = typeof payload === 'string' ? payload : payload?.message;
                 const status = typeof payload === 'string' ? null : payload?.status;
                 state.error = message || 'Failed to fetch user';
+                state.noAccess = status === 403;
 
                 const normalizedMessage = String(message || '').toLowerCase();
                 const shouldClearAuth =

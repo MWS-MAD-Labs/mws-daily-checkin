@@ -1,3 +1,4 @@
+import { isStudent as isStudentUser } from "@/utils/accessControl";
 import React, { memo, useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { motion } from "framer-motion";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
@@ -261,7 +262,7 @@ const RatingPage = memo(function RatingPage() {
         return generateRecommendations(analysis, checkInData);
     }, [analysis, checkInData]);
 
-    const isStudent = user?.role === "student";
+    const isStudent = isStudentUser(user);
 
     const studentAnalysis = useMemo(() => {
         const ai = checkInData?.aiAnalysis || {};

@@ -1,17 +1,11 @@
+import { AUTOMATION_PROFILE } from '@/constants/enums';
+
 const normalizeText = (value = '') => String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
 const toTrimmedText = (value = '') => String(value || '').trim();
 
 export const normalizeRoleName = (role = '') => String(role || '').trim().toLowerCase();
 
-const EXECUTE_AUTOMATION_ROLES = new Set([
-    'teacher',
-    'se_teacher',
-    'head_unit',
-    'principal',
-    'directorate',
-    'admin',
-    'superadmin'
-]);
+const EXECUTE_AUTOMATION_ROLES = new Set([AUTOMATION_PROFILE]);
 
 const OPERATION_CONFIG = {
     create_mtss_intervention: {

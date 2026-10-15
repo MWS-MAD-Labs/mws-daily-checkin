@@ -5,7 +5,7 @@ const teacherId = '507f1f77bcf86cd799439020';
 const otherTeacherId = '507f1f77bcf86cd799439021';
 
 const mockUserFind = jest.fn();
-jest.mock('../../src/models/User', () => ({
+jest.mock('../../src/models/Person', () => ({
   find: mockUserFind
 }));
 
@@ -42,7 +42,7 @@ describe('getAvailableContacts class-teacher enrichment', () => {
       ])
     );
 
-    const req = { user: { id: 'student-1', role: 'student', email: 'student@millennia21.id' } };
+    const req = { user: { id: 'student-1', personType: 'student', email: 'student@millennia21.id' } };
     const res = {};
     await getAvailableContacts(req, res);
 
@@ -62,7 +62,7 @@ describe('getAvailableContacts class-teacher enrichment', () => {
       chainable([{ _id: teacherId, name: 'Mr. Himawan', email: 'himawan@millennia21.id', role: 'teacher' }])
     );
 
-    const req = { user: { id: 'student-1', role: 'student', email: 'student@millennia21.id' } };
+    const req = { user: { id: 'student-1', personType: 'student', email: 'student@millennia21.id' } };
     const res = {};
     await getAvailableContacts(req, res);
 

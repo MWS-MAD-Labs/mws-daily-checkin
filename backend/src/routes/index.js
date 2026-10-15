@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { checkinLimiter } = require('../middleware/rateLimiter');
+const { authenticate } = require('../middleware/auth');
 
 // Import route modules
 const authRoutes = require('./auth');
@@ -176,7 +177,7 @@ router.use('/v1/sync', syncRoutes);
 // router.use('/auth', authRoutes);
 
 // Client-side audit event sink (docx downloads, exports, etc.)
-router.post('/v1/audit/events', (req, res) => {
+router.post('/v1/audit/events', authenticate, (req, res) => {
     try {
         const { event, filename, reportTitle, sourcePage, actorId, actorName, actorRole, timestamp } = req.body || {};
         const ALLOWED_EVENTS = new Set(['docx_download']);

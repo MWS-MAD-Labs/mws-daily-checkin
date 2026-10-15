@@ -3,7 +3,7 @@ jest.mock('../../src/models/EmotionalCheckin', () => ({
   countDocuments: jest.fn()
 }));
 
-jest.mock('../../src/models/User', () => ({
+jest.mock('../../src/models/Person', () => ({
   findById: jest.fn()
 }));
 
@@ -24,7 +24,7 @@ jest.mock('../../src/utils/response', () => ({
 }));
 
 const EmotionalCheckin = require('../../src/models/EmotionalCheckin');
-const User = require('../../src/models/User');
+const Person = require('../../src/models/Person');
 const { sendSuccess, sendError } = require('../../src/utils/response');
 const { getUserCheckinHistory } = require('../../src/controllers/dashboardController');
 
@@ -38,7 +38,7 @@ const buildFindChain = (result = []) => ({
 
 describe('Dashboard user-history authorization', () => {
   const mockTargetUser = (record) => {
-    User.findById.mockReturnValue({
+    Person.findById.mockReturnValue({
       select: jest.fn().mockResolvedValue(record)
     });
   };
@@ -49,28 +49,32 @@ describe('Dashboard user-history authorization', () => {
     EmotionalCheckin.countDocuments.mockResolvedValue(0);
   });
 
-  test('allows head_unit to access user in same unit', async () => {
+  const viewer = (mode, unit = 'Elementary') => ({ staffDashboardScope: { mode, unit } });
+
+  test('allows a unit scope to open a person in the same unit', async () => {
     mockTargetUser({ unit: 'Elementary', department: 'Elementary' });
 
-    const req = {
-      query: { userId: '507f1f77bcf86cd799439011', limit: '10', offset: '0' },
-      user: { role: 'head_unit', unit: 'Elementary', department: 'Elementary' }
-    };
-
+    const req = { query: { userId: '507f1f77bcf86cd799439011', limit: '10', offset: '0' }, user: viewer('unit') };
     await getUserCheckinHistory(req, {});
 
     expect(sendSuccess).toHaveBeenCalled();
     expect(sendError).not.toHaveBeenCalled();
   });
 
-  test('allows head_unit to access user outside their own unit (company-wide access, same as directorate)', async () => {
+  test('refuses a unit scope for a person in another unit', async () => {
     mockTargetUser({ unit: 'Junior High', department: 'Junior High' });
 
-    const req = {
-      query: { userId: '507f1f77bcf86cd799439012' },
-      user: { role: 'head_unit', unit: 'Elementary', department: 'Elementary' }
-    };
+    const req = { query: { userId: '507f1f77bcf86cd799439012' }, user: viewer('unit') };
+    await getUserCheckinHistory(req, {});
 
+    expect(sendError).toHaveBeenCalledWith({}, 'This person is outside your dashboard scope', 403);
+    expect(sendSuccess).not.toHaveBeenCalled();
+  });
+
+  test('lets the all scope open anyone', async () => {
+    mockTargetUser({ unit: 'Junior High', department: 'Junior High' });
+
+    const req = { query: { userId: '507f1f77bcf86cd799439012' }, user: viewer('all') };
     await getUserCheckinHistory(req, {});
 
     expect(sendSuccess).toHaveBeenCalled();
@@ -82,7 +86,7 @@ describe('Dashboard user-history authorization', () => {
 
     const req = {
       query: { userId: '507f1f77bcf86cd799439013' },
-      user: { role: 'head_unit', unit: 'Elementary', department: 'Elementary' }
+      user: viewer('unit')
     };
 
     await getUserCheckinHistory(req, {});

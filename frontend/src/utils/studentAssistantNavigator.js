@@ -1,3 +1,5 @@
+import { ASSISTANT_PROFILE } from '@/constants/enums';
+
 import { normalizeAssistantIntentText } from './assistantIntentNormalizer';
 
 const COMMON_ALLOWED_ROUTES = new Set([
@@ -170,9 +172,9 @@ const normalizeText = (value = '') => String(value || '').toLowerCase().replace(
 const normalizeRole = (role = '') => String(role || '').trim().toLowerCase();
 const normalizeTheme = (theme = '') => (String(theme || '').trim().toLowerCase() === 'dark' ? 'dark' : 'light');
 const getThemeIncantation = (theme = 'light') => (normalizeTheme(theme) === 'dark' ? 'Nox' : 'Lumos Maxima');
-const MTSS_ADMIN_NAV_ROLES = new Set(['head_unit', 'principal', 'directorate', 'admin', 'superadmin']);
+const MTSS_ADMIN_NAV_ROLES = new Set([ASSISTANT_PROFILE.LEADER, ASSISTANT_PROFILE.ADMIN]);
 
-const isStudentRole = (role = '') => normalizeRole(role) === 'student';
+const isStudentRole = (role = '') => normalizeRole(role) === ASSISTANT_PROFILE.STUDENT;
 
 export const getAssistantAllowedRoutes = (role = 'student') => {
     if (isStudentRole(role)) return STUDENT_ALLOWED_ROUTES;
@@ -180,12 +182,12 @@ export const getAssistantAllowedRoutes = (role = 'student') => {
     const normalizedRole = normalizeRole(role);
     const routes = new Set([...WORKFORCE_BASE_ROUTES]);
 
-    if (['teacher', 'se_teacher', 'head_unit', 'principal', 'directorate', 'admin', 'superadmin'].includes(normalizedRole)) {
+    if ([ASSISTANT_PROFILE.TEACHER, ASSISTANT_PROFILE.LEADER, ASSISTANT_PROFILE.ADMIN].includes(normalizedRole)) {
         routes.add('/emotional-checkin/teacher-dashboard');
         routes.add('/mtss/teacher');
     }
 
-    if (['head_unit', 'principal', 'directorate', 'admin', 'superadmin'].includes(normalizedRole)) {
+    if ([ASSISTANT_PROFILE.LEADER, ASSISTANT_PROFILE.ADMIN].includes(normalizedRole)) {
         routes.add('/emotional-checkin/dashboard');
     }
 
@@ -193,7 +195,7 @@ export const getAssistantAllowedRoutes = (role = 'student') => {
         routes.add('/mtss/admin');
     }
 
-    if (['admin', 'superadmin', 'directorate'].includes(normalizedRole)) {
+    if (normalizedRole === ASSISTANT_PROFILE.ADMIN) {
         routes.add('/user-management');
     }
 

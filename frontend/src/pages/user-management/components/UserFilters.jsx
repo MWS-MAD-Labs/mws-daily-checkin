@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { CheckCircle2, Power, Search, Filter, X, Plus, Download } from "lucide-react";
+import { Search, Filter, X, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -15,11 +15,6 @@ import { Badge } from "@/components/ui/badge";
 const UserFilters = memo(({
     filters,
     onFiltersChange,
-    onAddUser,
-    bulkStatusMode,
-    bulkStatusCount = 0,
-    bulkStatusLoading = false,
-    onBulkStatusAction
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [searchValue, setSearchValue] = useState(filters.search || '');
@@ -130,23 +125,6 @@ const UserFilters = memo(({
                     )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                    {bulkStatusMode && (
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={onBulkStatusAction}
-                            disabled={bulkStatusLoading || bulkStatusCount === 0}
-                        >
-                            {bulkStatusMode === 'activate' ? (
-                                <CheckCircle2 className="w-4 h-4 mr-2" />
-                            ) : (
-                                <Power className="w-4 h-4 mr-2" />
-                            )}
-                            {bulkStatusLoading
-                                ? 'Updating...'
-                                : `${bulkStatusMode === 'activate' ? 'Activate' : 'Deactivate'} All`}
-                        </Button>
-                    )}
                     <Button
                         variant="outline"
                         size="sm"
@@ -154,14 +132,6 @@ const UserFilters = memo(({
                     >
                         <Filter className="w-4 h-4 mr-2" />
                         {isExpanded ? 'Collapse' : 'Expand'}
-                    </Button>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={onAddUser}
-                    >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Add User
                     </Button>
                     <Button
                         variant="outline"

@@ -1,25 +1,26 @@
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
-const UserStudent = require('../models/UserStudent');
 const { sendError } = require('../utils/response');
-const { COOKIE_NAME } = require('../utils/authCookie');
+const { hubSession } = require('../utils/hubSession');
+const { resolveSessionUser } = require('../utils/hubSessionUser');
 const {
-    buildDashboardAccessProfile,
     buildMtssAccessProfile,
     hasMtssAccess,
     hasMtssAdminAccess,
     hasMtssWriteAccess
 } = require('../utils/accessControl');
+const { resolveStudentScope, resolveStaffScope } = require('../utils/accessScope');
+const { SCOPE_MODE } = require('../constants/enums');
 
 const buildRequestUser = (user) => {
-    const dashboardAccess = buildDashboardAccessProfile(user);
     const mtssAccess = buildMtssAccessProfile(user);
 
-    return {
+    const requestUser = {
         id: user._id,
         email: user.email,
         name: user.name,
         role: user.role,
+        jobKind: user.jobKind,
+        workingPeriod: user.workingPeriod,
+        joinDate: user.joinDate,
         username: user.username,
         employeeId: user.employeeId,
         department: user.department,
@@ -27,161 +28,94 @@ const buildRequestUser = (user) => {
         unit: user.unit,
         jobPosition: user.jobPosition,
         employmentStatus: user.employmentStatus,
-        googleId: user.googleId,
         classes: user.classes || [],
         currentGrade: user.currentGrade,
         className: user.className,
         nickname: user.nickname,
         gender: user.gender || '',
         joinAcademicYear: user.joinAcademicYear,
-        reportsTo: user.reportsTo,
-        subordinates: user.subordinates || [],
-        dashboardRole: dashboardAccess.effectiveRole,
-        dashboardAccess,
         mtssRole: mtssAccess.effectiveRole,
-        mtssAccess
+        mtssAccess,
+        permissions: user.centralEntitlementPermissions || [],
+        entitlementRole: user.centralEntitlementRole || null,
+        entitlementId: user.centralEntitlementId || null,
+        entitlementVersion: user.centralEntitlementVersion ?? null,
+        entitlementOrganizationId: user.centralEntitlementOrganizationId || null,
+        personType: user.personType,
     };
+
+    // How much of each dashboard this person may open, worked out from what Central gave them.
+    requestUser.studentDashboardScope = resolveStudentScope(requestUser);
+    requestUser.staffDashboardScope = resolveStaffScope(requestUser);
+    return requestUser;
 };
 
-const resolveUserByRoleAndId = async (role, userId) => {
-    let user = null;
-    if (role === 'student') {
-        user = await UserStudent.findById(userId);
-    }
-    if (!user) {
-        user = await User.findById(userId);
-    }
-    return user;
-};
-
-// JWT Authentication Middleware
+// Who is making the request: the Hub's access token (a cookie on the parent domain) says who they are, and Central
+// says what they may do in this app. See utils/hubSession.js and utils/hubSessionUser.js.
 const authenticate = async (req, res, next) => {
     try {
-        // Cookie first - the browser's own session, now that the token
-        // lives in an httpOnly cookie instead of localStorage (see
-        // utils/authCookie.js). The Authorization header stays supported
-        // for non-browser callers, like the AI-chat proxy's own outbound
-        // service token.
-        const authHeader = req.headers.authorization;
-        const cookieToken = req.cookies?.[COOKIE_NAME];
-
-        let token;
-        if (cookieToken) {
-            token = cookieToken;
-        } else if (authHeader && authHeader.startsWith('Bearer ')) {
-            token = authHeader.substring(7);
-        } else {
-            return sendError(res, 'Access token required', 401);
+        const claims = await hubSession().fromCookieHeader(req.headers.cookie);
+        if (!claims) {
+            return sendError(res, 'Authentication required', 401);
         }
 
-        // Verify token
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-        // Check if user exists and is active
-        const user = await resolveUserByRoleAndId(decoded.role, decoded.userId);
-        if (!user || !user.isActive) {
-            return sendError(res, 'User not found or inactive', 401);
+        const user = await resolveSessionUser(claims);
+        if (!user) {
+            return sendError(res, 'No access to Daily Check-in', 403);
         }
-
-        // A token minted before this field existed has no sessionVersion
-        // claim at all - treat that as 0 rather than rejecting every
-        // already-issued session the moment this deploys. Mismatch means
-        // Hub's back-channel logout (routes/auth.js's /auth/revoke-session)
-        // bumped the stored value since this token was signed.
-        if ((decoded.sessionVersion || 0) !== (user.sessionVersion || 0)) {
-            return sendError(res, 'Session has been revoked', 401);
+        if (!user.isActive) {
+            return sendError(res, 'Account is deactivated', 403);
         }
 
         // Attach user to request object
         req.user = buildRequestUser(user);
+        req.hubClaims = claims;
 
         next();
     } catch (error) {
-        if (error.name === 'TokenExpiredError') {
-            return sendError(res, 'Token expired', 401);
-        } else if (error.name === 'JsonWebTokenError') {
-            return sendError(res, 'Invalid token', 401);
-        }
-
-        console.error('Auth middleware error:', error);
-        return sendError(res, 'Authentication failed', 500);
+        console.error('Authentication error:', error.message);
+        return sendError(res, 'Could not verify your access. Try again shortly.', 503);
     }
 };
 
-// Role-based authorization middleware
-const authorize = (...roles) => {
-    return (req, res, next) => {
-        if (!req.user) {
-            return sendError(res, 'Authentication required', 401);
-        }
-
-        if (!roles.includes(req.user.role)) {
+// A route is gated by what Central gave the person, never by a role kept here. The guard remembers what it asks
+// for so a test can check that every route has one.
+const requireAnyPermission = (...permissions) => {
+    const guard = (req, res, next) => {
+        if (!req.user) return sendError(res, 'Authentication required', 401);
+        if (!permissions.some((permission) => req.user.permissions.includes(permission))) {
             return sendError(res, 'Insufficient permissions', 403);
         }
-
         next();
     };
+    guard.permissions = permissions;
+    return guard;
 };
 
-// Admin and above roles
-const requireAdmin = authorize('admin', 'superadmin', 'directorate');
-const requireMTSSAdmin = authorize('admin', 'superadmin', 'directorate', 'head_unit');
-const requireMTSSAccess = (req, res, next) => {
-    if (!req.user) {
-        return sendError(res, 'Authentication required', 401);
-    }
-    if (!hasMtssAccess(req.user)) {
-        return sendError(res, 'You do not have access to MTSS.', 403);
+const requirePermission = (permission) => requireAnyPermission(permission);
+
+// Reading the dashboard is not enough: the person also needs a scope that shows somebody.
+const requireStaffDashboardScope = (req, res, next) => {
+    if (!req.user) return sendError(res, 'Authentication required', 401);
+    if (req.user.staffDashboardScope.mode === SCOPE_MODE.NONE) {
+        return sendError(res, 'No staff are open to your dashboard', 403);
     }
     next();
 };
 
-const requireMTSSWriteAccess = (req, res, next) => {
-    if (!req.user) {
-        return sendError(res, 'Authentication required', 401);
-    }
-    if (!hasMtssWriteAccess(req.user)) {
-        return sendError(res, 'You do not have write access to MTSS.', 403);
-    }
-    next();
-};
-
-const requireScopedMTSSAdmin = (req, res, next) => {
-    if (!req.user) {
-        return sendError(res, 'Authentication required', 401);
-    }
-    if (!hasMtssAdminAccess(req.user)) {
-        return sendError(res, 'You do not have admin access to MTSS.', 403);
-    }
-    next();
-};
-
-// Super admin and directorate only
-const requireSuperAdmin = authorize('superadmin', 'directorate');
-
-// Staff and teacher access (for their own data) - now includes student for Google OAuth users
-const requireStaffOrTeacher = authorize('staff', 'teacher', 'admin', 'superadmin', 'directorate', 'student', 'support_staff', 'se_teacher', 'head_unit', 'counselor');
-const requireTeacherAccess = authorize('teacher', 'se_teacher');
-
-// Any authenticated user
-const requireAuthenticated = (req, res, next) => {
-    if (!req.user) {
-        return sendError(res, 'Authentication required', 401);
+const requireStudentDashboardScope = (req, res, next) => {
+    if (!req.user) return sendError(res, 'Authentication required', 401);
+    if (req.user.studentDashboardScope.mode === SCOPE_MODE.NONE) {
+        return sendError(res, 'No students are open to your dashboard', 403);
     }
     next();
 };
 
 module.exports = {
     authenticate,
-    authorize,
-    requireAdmin,
-    requireMTSSAdmin,
-    requireMTSSAccess,
-    requireMTSSWriteAccess,
-    requireScopedMTSSAdmin,
-    requireSuperAdmin,
-    requireStaffOrTeacher,
-    requireTeacherAccess,
-    requireAuthenticated,
-    buildRequestUser
+    requireStaffDashboardScope,
+    requireStudentDashboardScope,
+    buildRequestUser,
+    requirePermission,
+    requireAnyPermission,
 };

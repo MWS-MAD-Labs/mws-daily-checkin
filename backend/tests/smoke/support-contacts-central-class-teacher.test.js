@@ -5,7 +5,7 @@ const homeroomId = '507f1f77bcf86cd799439030';
 
 const mockUserFind = jest.fn();
 const mockUserFindOne = jest.fn();
-jest.mock('../../src/models/User', () => ({
+jest.mock('../../src/models/Person', () => ({
   find: mockUserFind,
   findOne: mockUserFindOne
 }));
@@ -48,7 +48,7 @@ describe('getSupportContacts central class-teacher lookup', () => {
       )
     }));
 
-    const req = { user: { id: 'student-1', role: 'student', email: 'student@millennia21.id', department: 'Junior High' } };
+    const req = { user: { id: 'student-1', personType: 'student', email: 'student@millennia21.id', department: 'Junior High' } };
     const res = {};
     await getSupportContacts(req, res);
 
@@ -63,7 +63,7 @@ describe('getSupportContacts central class-teacher lookup', () => {
   test('falls back gracefully when the central lookup throws', async () => {
     mockGetStudentSupportContacts.mockRejectedValue(new Error('network error'));
 
-    const req = { user: { id: 'student-1', role: 'student', email: 'student@millennia21.id', department: 'Junior High' } };
+    const req = { user: { id: 'student-1', personType: 'student', email: 'student@millennia21.id', department: 'Junior High' } };
     const res = {};
     await getSupportContacts(req, res);
 

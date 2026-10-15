@@ -1,289 +1,26 @@
 const express = require('express');
 const router = express.Router();
-const crypto = require('crypto');
-const helmet = require('helmet');
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
-const UserStudent = require('../models/UserStudent');
+const Person = require('../models/Person');
 const { sendSuccess, sendError } = require('../utils/response');
-const { hasDashboardAccess, hasMtssAccess } = require('../utils/accessControl');
+const { hasMtssAccess } = require('../utils/accessControl');
 const { buildRequestUser } = require('../middleware/auth');
-const { syncEmployeeFromCentral } = require('../utils/employeeCentralSync');
-const { verifyHubRelayToken } = require('../utils/hubSsoRelay');
-const { resolveOrProvisionSsoUser } = require('../utils/ssoUserResolution');
-const { createUserAwareRateLimiter } = require('../middleware/rateLimiter');
-const { setAuthCookie, clearAuthCookie, COOKIE_NAME } = require('../utils/authCookie');
 
-// Tighter than the general apiLimiter (which skips /v1/auth entirely) -
-// this is a sensitive auth entry point, not a regular auth check.
-const ssoLimiter = createUserAwareRateLimiter({ windowMinutes: 1, max: 20, skip: () => false });
+// Signing in and out belong to the Hub. The Hub keeps a short access token in a cookie on the parent domain, every
+// request is checked against it (middleware/auth.js), and the page keeps it fresh (see frontend keepFresh).
+// So this app has no sign-in, sign-out or session-revocation routes: signing out of the Hub signs out of every app.
 
-const isCentralLookupError = (error) => {
-    const baseUrl = error?.config?.baseURL;
-    const path = error?.config?.url;
-    return Boolean(
-        baseUrl === process.env.MWS_DATA_CENTER_API_URL ||
-        (typeof path === 'string' && /^\/(employees|students)\//.test(path))
-    );
-};
-
-// Hub token-relay SSO handoff. Hub already authenticated the user (its own
-// Google login) and mints a short-lived, single-use, audience-scoped token
-// asserting "this email"; we never trust anything beyond that email claim -
-// every profile field still comes fresh from mws-data-center.
-//
-// app.js's global helmet() defaults Cross-Origin-Opener-Policy to
-// 'same-origin'. That header forces the browser to sever this navigation
-// into a brand-new browsing-context group, which breaks Hub's
-// window.open("", name) tab-reuse trick (see mws-hub's AppCard.tsx) -
-// every relaunch reopens a fresh tab instead of finding and refreshing the
-// one already open, no matter what name Hub asks for. Scope the
-// relaxation to just this transient redirect hop rather than touching the
-// app-wide default.
-router.get('/sso', helmet.crossOriginOpenerPolicy({ policy: 'unsafe-none' }), ssoLimiter, async (req, res) => {
+// Where the Hub's card opens Daily Check-in. There is nothing to sign in to: the Hub's session is read from its
+// cookie by the pages and the API. This only sends the browser to the app.
+router.get('/sso', (req, res) => {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174/daily-checkin';
-    const { token } = req.query;
-
-    if (!token || typeof token !== 'string') {
-        return res.redirect(`${frontendUrl}/?error=sso_missing_token`);
-    }
-
-    let payload;
-    try {
-        payload = verifyHubRelayToken(token);
-    } catch (error) {
-        console.error('❌ Hub SSO relay token verification failed:', error.message);
-        return res.redirect(`${frontendUrl}/?error=sso_invalid_token`);
-    }
-
-    try {
-        const dbUser = await resolveOrProvisionSsoUser(payload.sub, { tags: payload.tags, source: payload.source });
-
-        if (!dbUser) {
-            console.log('❌ No active central record for Hub SSO email:', payload.sub);
-            return res.redirect(`${frontendUrl}/account-not-found`);
-        }
-
-        if (!dbUser.isActive) {
-            console.error('❌ Inactive user attempted Hub SSO login:', dbUser.email);
-            return res.redirect(`${frontendUrl}/?error=account_inactive`);
-        }
-
-        const sessionToken = jwt.sign(
-            { userId: dbUser._id, email: dbUser.email, role: dbUser.role, sessionVersion: dbUser.sessionVersion || 0 },
-            process.env.JWT_SECRET,
-            { expiresIn: process.env.JWT_EXPIRES_IN || '1d' }
-        );
-        setAuthCookie(res, sessionToken);
-
-        const userDataForFrontend = {
-            ...buildRequestUser(dbUser),
-            lastLogin: dbUser.lastLogin,
-            isActive: dbUser.isActive,
-            emailVerified: dbUser.emailVerified,
-            validatedAt: new Date().toISOString(),
-            authMethod: 'hub_sso'
-        };
-
-        // Basename-relative - the frontend's own React Router basename
-        // (main.jsx) turns this into /daily-checkin/home for the browser.
-        const redirectTarget = '/home';
-
-        // No token in this URL - it's already set as an httpOnly cookie above.
-        const redirectUrl = `${frontendUrl}/auth/callback#user=${encodeURIComponent(JSON.stringify(userDataForFrontend))}&redirect=${encodeURIComponent(redirectTarget)}`;
-
-        console.log('✅ Hub SSO login successful:', {
-            email: dbUser.email,
-            role: dbUser.role,
-            redirectTarget
-        });
-        res.redirect(redirectUrl);
-    } catch (error) {
-        const centralLookupFailed = isCentralLookupError(error);
-        console.error('❌ Hub SSO handoff error:', {
-            email: payload.sub,
-            centralLookupFailed,
-            status: error?.response?.status,
-            path: error?.config?.url,
-            message: error?.message
-        });
-        res.redirect(`${frontendUrl}/?error=${centralLookupFailed ? 'sso_central_lookup_failed' : 'sso_failed'}`);
-    }
-});
-
-// Manual login route
-router.post('/login', require('../middleware/validation').validate(require('../utils/validationSchemas').userLoginSchema), async (req, res) => {
-    try {
-        const { email, password } = req.body;
-        const normalizedEmail = String(email || '').trim().toLowerCase();
-
-        // Find user by email (staff first, then students)
-        let user = await User.findOne({ email: normalizedEmail }).select('+password');
-        let userModel = User;
-        if (!user) {
-            user = await UserStudent.findOne({ email: normalizedEmail }).select('+password');
-            userModel = UserStudent;
-        }
-
-        if (!user) {
-            return sendError(res, 'Invalid credentials', 401);
-        }
-
-        // Check password
-        const isValidPassword = await user.comparePassword(password);
-        if (!isValidPassword) {
-            return sendError(res, 'Invalid credentials', 401);
-        }
-
-        // Staff identity is validated/synced against mws-data-center on every
-        // login — students aren't covered by that API yet, so left as-is.
-        if (userModel === User) {
-            let centralFields;
-            try {
-                centralFields = await syncEmployeeFromCentral(normalizedEmail);
-            } catch (error) {
-                console.error('mws-data-center lookup failed:', error.message);
-                return sendError(res, 'Unable to verify employee with central database', 502);
-            }
-
-            if (!centralFields) {
-                return sendError(res, 'Employee not found or inactive in central database', 403);
-            }
-
-            Object.assign(user, centralFields);
-        }
-
-        user.lastLogin = new Date();
-        await user.save();
-
-        // Generate JWT token
-        const jwt = require('jsonwebtoken');
-        const token = jwt.sign(
-            {
-                userId: user._id,
-                email: user.email,
-                role: user.role,
-                sessionVersion: user.sessionVersion || 0
-            },
-            process.env.JWT_SECRET,
-            { expiresIn: process.env.JWT_EXPIRES_IN || '1d' }
-        );
-        setAuthCookie(res, token);
-
-        // Token lives in the httpOnly cookie now, not the response body -
-        // the frontend never needs to see or store it directly.
-        sendSuccess(res, 'Login successful', { user: buildRequestUser(user) });
-
-    } catch (error) {
-        console.error('Login error:', error);
-        sendError(res, 'Login failed', 500);
-    }
-});
-
-// Logout — clears the httpOnly session cookie server-side (the client can't
-// do this itself the way it could with localStorage.removeItem).
-router.post('/logout', (req, res) => {
-    // Read who this actually was BEFORE clearing the cookie - Hub's own
-    // logout cascade (see mws-hub's logoutFromApp) needs to know this so it
-    // doesn't blindly clear whatever DIFFERENT account Hub's own session
-    // currently holds (e.g. a stale Daily Checkin session for one person
-    // sitting alongside a genuinely different, currently-active Hub login).
-    let loggedOutEmail = null;
-    try {
-        const token = req.cookies?.[COOKIE_NAME];
-        if (token) loggedOutEmail = jwt.verify(token, process.env.JWT_SECRET).email;
-    } catch {
-        // expired/invalid token - nothing to attribute, fall through as before
-    }
-
-    clearAuthCookie(res);
-
-    // Signing out here should also end the Hub session, otherwise the user
-    // lands back on the hub still logged in and one click re-enters this app.
-    //
-    // Hub's session is a cookie on Hub's domain, so only the browser can
-    // clear it - no server-to-server call can. We hand the client a URL to
-    // navigate to instead of trying to do it from here.
-    const hubBaseUrl = process.env.HUB_BASE_URL;
-    // redirect points back at this app's own landing page instead of
-    // leaving the user on Hub's front page - mws-hub's resolveLogoutRedirect
-    // only allows an origin already registered in its catalog, so this only
-    // works because daily-checkin's own origin is already there.
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174/daily-checkin';
-    // Trailing slash matters here specifically - Vite's dev server serves
-    // this app under a strict base path and errors on the bare (no
-    // trailing slash) form, unlike the /auth/sso handler above which needs
-    // frontendUrl WITHOUT one to avoid a double slash before /auth/callback.
-    const logoutRedirectUrl = `${frontendUrl.replace(/\/$/, '')}/`;
-    const hubLogoutUrl = hubBaseUrl
-        ? `${hubBaseUrl.replace(/\/$/, '')}/auth/logout?redirect=${encodeURIComponent(logoutRedirectUrl)}${loggedOutEmail ? `&email=${encodeURIComponent(loggedOutEmail)}` : ''}`
-        : null;
-
-    sendSuccess(res, 'Logged out successfully', hubLogoutUrl ? { hubLogoutUrl } : null);
-});
-
-// Hub-initiated logout fan-out: Hub loads this in a hidden iframe when the
-// user logs out from Hub or another app, so this app's own session ends too
-// without the user visiting it directly. No-UI by design - just clears
-// local session state. Needs its own CSP relaxation (and X-Frame-Options
-// removed) since helmet's app-wide default blocks any cross-origin framing,
-// which would otherwise stop Hub's hidden iframe from ever loading this.
-router.get('/logout-silent', (req, res) => {
-    const hubOrigin = (process.env.HUB_BASE_URL || '').replace(/\/$/, '');
-    res.removeHeader('X-Frame-Options');
-    res.setHeader('Content-Security-Policy', `frame-ancestors 'self'${hubOrigin ? ` ${hubOrigin}` : ''}`);
-    // This request is same-origin to daily-checkin (just framed by Hub's
-    // different origin), so clearing our own cookie here still works even
-    // though Hub can't touch it directly.
-    clearAuthCookie(res);
-    res.type('html').send(
-        `<!doctype html><html><body><script>try{localStorage.removeItem('daily.auth_token');localStorage.removeItem('daily.auth_user');sessionStorage.removeItem('daily.auth_token');sessionStorage.removeItem('daily.auth_user');}catch(e){}</script></body></html>`
-    );
-});
-
-// Constant-time secret compare - avoids leaking how many leading bytes of
-// HUB_INTERNAL_SECRET a guess got right via response-time differences.
-const safeSecretEqual = (a, b) => {
-    const bufA = Buffer.from(String(a || ''));
-    const bufB = Buffer.from(String(b || ''));
-    if (bufA.length !== bufB.length) return false;
-    return crypto.timingSafeEqual(bufA, bufB);
-};
-
-// Back-channel session revocation. Hub calls this directly (server-to-
-// server, not through the user's browser) when signing someone out
-// anywhere - the fan-out iframe (/auth/logout-silent above) depends on the
-// browser actually loading it and third-party cookies not being blocked,
-// neither of which is guaranteed; this bumps sessionVersion instead, which
-// invalidates every already-issued JWT for that email the next time
-// middleware/auth.js's authenticate checks it, regardless of whether the
-// browser ever visits this app again.
-router.post('/revoke-session', async (req, res) => {
-    const providedSecret = req.headers['x-hub-internal-secret'];
-    const expectedSecret = process.env.HUB_INTERNAL_SECRET;
-    if (!expectedSecret || !safeSecretEqual(providedSecret, expectedSecret)) {
-        return sendError(res, 'Unauthorized', 401);
-    }
-
-    const email = String(req.body?.email || '').trim().toLowerCase();
-    if (!email) {
-        return sendError(res, 'email is required', 400);
-    }
-
-    await Promise.all([
-        User.updateOne({ email }, { $inc: { sessionVersion: 1 } }),
-        UserStudent.updateOne({ email }, { $inc: { sessionVersion: 1 } })
-    ]);
-
-    sendSuccess(res, 'Session revoked');
+    res.redirect(`${frontendUrl.replace(/\/$/, '')}/`);
 });
 
 // Get current user info
 router.get('/me', require('../middleware/auth').authenticate, async (req, res) => {
     try {
         // Fetch fresh user data from database for security
-        const userModel = req.user.role === 'student' ? UserStudent : User;
-        const user = await userModel.findById(req.user.id).select('-password -googleProfile');
+        const user = await Person.findById(req.user.id);
 
         if (!user) {
             console.error('❌ User not found in /auth/me endpoint:', req.user.id);
@@ -299,14 +36,11 @@ router.get('/me', require('../middleware/auth').authenticate, async (req, res) =
         const responseUser = buildRequestUser(user);
 
         // Log role access for security monitoring
-        const canViewDashboard = hasDashboardAccess(responseUser);
         console.log('🔐 /auth/me access - Role validation:', {
             userId: user._id,
             email: user.email,
-            role: responseUser.role,
-            dashboardRole: responseUser.dashboardRole,
-            delegatedFrom: responseUser.dashboardAccess?.delegatedFromEmail || null,
-            hasDashboardAccess: canViewDashboard,
+            staffDashboard: responseUser.staffDashboardScope.mode,
+            studentDashboard: responseUser.studentDashboardScope.mode,
             hasMtssAccess: hasMtssAccess(responseUser),
             mtssRole: responseUser.mtssRole || null,
             department: responseUser.department,

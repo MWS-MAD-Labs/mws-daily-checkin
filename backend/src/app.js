@@ -12,9 +12,7 @@ const openRouterChat = require('./config/openRouterChat');
 const { initSocket } = require('./config/socket');
 const slackSocketService = require('./services/slackSocketService');
 const { createCorsOriginChecker, validateCorsConfiguration } = require('./config/cors');
-const employeeRosterSync = require('./jobs/employeeRosterSync');
-const studentRosterSync = require('./jobs/studentRosterSync');
-const classAssignmentSync = require('./jobs/classAssignmentSync');
+const centralSync = require('./jobs/centralSync');
 
 // Import routes
 const routes = require('./routes');
@@ -55,7 +53,12 @@ app.set('trust proxy', 1);
 
 // Security middleware
 app.use(helmet({
-    crossOriginResourcePolicy: { policy: 'cross-origin' }
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    contentSecurityPolicy: {
+        directives: {
+            imgSrc: ["'self'", 'data:', 'blob:', 'https://*.tile.openstreetmap.org', 'https://res.cloudinary.com']
+        }
+    }
 }));
 
 // CORS configuration (explicit allowlist in production)
@@ -134,22 +137,12 @@ const initializeApp = async () => {
 
         // Connect to MongoDB
         await connectDB();
+        // Keeps the indexes of the people collection exactly as the model says (drops one the model no longer has).
+        await require('./models/Person').syncIndexes();
 
-        // Periodically mirror the active employee roster from mws-data-center,
-        // so someone deactivated there gets logged out here too (and a
-        // rehired employee gets reactivated) instead of only syncing at login.
-        employeeRosterSync.start();
-        // Same safety net for students - a withdrawn/graduated/transferred
-        // student otherwise keeps their 7-day session until it naturally
-        // expires or they log in again.
-        studentRosterSync.start();
-        // Keeps teachers' classes[] in sync with Central's real
-        // ClassTeacherAssignment data - previously only ever set by a
-        // manual, name-matched seed script (scripts/seedUserClassAssignments.js),
-        // so a newly (re-)provisioned account sat at classes: [] until
-        // someone remembered to re-run it, showing zero students on the
-        // daily check-in dashboard for a real teacher.
-        classAssignmentSync.start();
+        // Keeps the people of this app in line with Central (who may use it, their unit, grade and classes)
+        // by itself, once a minute by default.
+        centralSync.start();
 
         // Test Google AI connection (with graceful fallback for overload and quota)
         try {

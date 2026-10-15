@@ -6,12 +6,14 @@ const { buildStudentUserPayload } = require('./studentUserHelpers');
 // account as not-a-student, e.g. fall through to the employee check).
 // mws-data-center's /students/lookup only ever returns ACTIVE students, so
 // there's no status other than "ACTIVE" to map here.
-async function syncStudentFromCentral(email) {
+async function syncStudentFromCentral(email, centralPersonId) {
+    // Central finds a student by id, nis or email, not by person id.
     const centralStudent = await lookupStudentByEmail(email);
     if (!centralStudent) return null;
 
     return buildStudentUserPayload({
         email: centralStudent.email,
+        centralPersonId: centralStudent.person_id,
         name: centralStudent.full_name,
         nickname: centralStudent.nick_name,
         gender: centralStudent.gender,

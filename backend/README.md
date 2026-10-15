@@ -210,7 +210,7 @@ MONGODB_URI=mongodb://localhost:27017/integra-learn
 
 # JWT
 JWT_SECRET=your_super_secret_jwt_key
-JWT_EXPIRES_IN=7d
+JWT_EXPIRES_IN=15m
 
 # Google AI
 GOOGLE_AI_API_KEY=your_google_ai_api_key
@@ -287,5 +287,4 @@ pm2 start src/server.js --name "integra-learn-backend"
 ## License
 
 ISC License - IntegraLearn Hub
-
 

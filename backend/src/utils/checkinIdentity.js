@@ -1,4 +1,4 @@
-const CHECKIN_USER_SELECT = 'name email role department unit';
+const CHECKIN_USER_SELECT = 'name email personType jobKind department unit';
 
 const buildCheckinUserSnapshot = (user = {}) => ({
     userNameSnapshot: user?.name || undefined,
@@ -17,6 +17,7 @@ const isPopulatedUserDocument = (value) => Boolean(
         || value.name
         || value.email
         || value.role
+        || value.jobKind
         || value.department
         || value.unit
     )
@@ -54,7 +55,7 @@ const getCheckinResolvedIdentity = (checkin = {}) => {
         id: resolvedUser?._id || fallbackId || null,
         name: resolvedUser?.name || checkin.userNameSnapshot || 'Unknown User',
         email: resolvedUser?.email || checkin.userEmailSnapshot || null,
-        role: resolvedUser?.role || checkin.userRoleSnapshot || 'unknown',
+        role: resolvedUser?.role || resolvedUser?.jobKind || checkin.userRoleSnapshot || 'unknown',
         department: resolvedUser?.department || checkin.userDepartmentSnapshot || resolvedUser?.unit || checkin.userUnitSnapshot || 'Unknown',
         unit: resolvedUser?.unit || checkin.userUnitSnapshot || resolvedUser?.department || checkin.userDepartmentSnapshot || 'Unknown'
     };

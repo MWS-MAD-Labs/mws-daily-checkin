@@ -4,6 +4,12 @@ require('dotenv').config({ path: '.env' });
 // Set test environment
 process.env.NODE_ENV = 'test';
 process.env.MONGODB_URI = 'mongodb://localhost:27017/integra-learn-test';
+process.env.CENTRAL_ORGANIZATION_ID = 'org-test';
+// openRouterChat reloads .env with override when the app loads, which puts the real organization id back.
+beforeEach(() => {
+    process.env.CENTRAL_ORGANIZATION_ID = 'org-test';
+});
+process.env.HUB_REPLAY_STORE = 'memory';
 
 // Mock Google AI for testing
 jest.mock('../src/config/googleAI', () => ({
@@ -21,7 +27,9 @@ jest.mock('../src/services/cacheService', () => ({
     setDashboardStats: jest.fn(),
     getDashboardStats: jest.fn(),
     setCheckinAnalysis: jest.fn(),
-    getCheckinAnalysis: jest.fn()
+    getCheckinAnalysis: jest.fn(),
+    hasSeenSsoJti: jest.fn(),
+    markSsoJtiSeen: jest.fn()
 }));
 
 // Global test utilities

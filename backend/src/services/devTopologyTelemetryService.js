@@ -79,7 +79,7 @@ const FRONTEND_PAGE_ROUTES = {
 
 const BACKEND_SERVICE_ROUTE_MAP = {
     'be-api-gateway': ['/api/v1/ai-chat/*', '/api/v1/ai-insights/*', '/api/v1/dev/topology/*'],
-    'be-auth-rbac': ['middleware/auth.authenticate', 'middleware/auth.authorize'],
+    'be-auth-rbac': ['middleware/auth.authenticate', 'middleware/auth.requirePermission'],
     'be-ai-orchestrator': ['aiChatController -> aiChatService.chat', 'aiInsightController -> aiInsightService.*'],
     'be-prompt-engine': ['ai prompt builders + context assembly'],
     'be-stream-broker': ['socket.io room: dev-topology', 'socket.io event: dev-topology:update'],

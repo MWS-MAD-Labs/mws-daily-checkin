@@ -1,4 +1,3 @@
-const DEFAULT_DASHBOARD_ROLES = new Set(['directorate', 'superadmin', 'admin', 'head_unit', 'counselor']);
 const MTSS_NATIVE_ADMIN_ROLES = new Set(['directorate', 'superadmin', 'admin']);
 const MTSS_NATIVE_LEADER_ROLES = new Set(['head_unit', 'principal']);
 const MTSS_NATIVE_TEACHER_ROLES = new Set(['teacher', 'se_teacher', 'staff', 'support_staff', 'counselor']);
@@ -14,68 +13,8 @@ const MTSS_NATIVE_TEACHER_ROLES = new Set(['teacher', 'se_teacher', 'staff', 'su
 // full MTSS admin access matching her actual Central position like every
 // other directorate-level user.
 
-// Centralized list of delegated dashboard access rules - for genuinely
-// one-off individual exceptions only. The school psychologist case that
-// used to live here (wina@millennia21.id) is now derived automatically from
-// Central's job_position ("School's Psychologist" -> role 'counselor', see
-// jobLevelRoleMapping.js's JOB_POSITION_TO_ROLE + DEFAULT_DASHBOARD_ROLES
-// above), so whoever holds that position gets access without a code change.
-const DASHBOARD_DELEGATIONS = [];
-
 const normalizeEmail = (email) => (typeof email === 'string' ? email.trim().toLowerCase() : '');
 const normalizeRole = (role) => (typeof role === 'string' ? role.trim().toLowerCase() : '');
-
-const findDelegation = (email) => {
-    const normalized = normalizeEmail(email);
-    if (!normalized) return null;
-    return DASHBOARD_DELEGATIONS.find((entry) => entry.email === normalized) || null;
-};
-
-const buildDashboardAccessProfile = (user) => {
-    if (!user) {
-        return {
-            hasDelegatedAccess: false,
-            effectiveRole: null,
-            scope: [],
-            delegatedFromEmail: null,
-            delegatedFromName: null,
-            description: null,
-            reason: null,
-            label: null
-        };
-    }
-
-    const baseRole = user.role || null;
-    const delegation = findDelegation(user.email);
-
-    if (!delegation) {
-        return {
-            hasDelegatedAccess: false,
-            effectiveRole: baseRole,
-            scope: [],
-            delegatedFromEmail: null,
-            delegatedFromName: null,
-            description: null,
-            reason: null,
-            label: null
-        };
-    }
-
-    return {
-        hasDelegatedAccess: true,
-        effectiveRole: delegation.delegatedRole || baseRole,
-        scope: Array.isArray(delegation.scope) && delegation.scope.length > 0
-            ? delegation.scope
-            : ['emotional_dashboard'],
-        delegatedFromEmail: delegation.delegatedFromEmail || null,
-        delegatedFromName: delegation.delegatedFromName || null,
-        description: delegation.description || 'Delegated emotional dashboard access',
-        reason: delegation.reason || null,
-        label: delegation.label || 'Delegated Dashboard Access'
-    };
-};
-
-const userHasNativeDashboardRole = (role) => DEFAULT_DASHBOARD_ROLES.has(role);
 
 const getMtssAccessLevelConfig = (level = '', user = {}) => {
     const normalizedLevel = String(level || '').trim().toLowerCase();
@@ -204,29 +143,6 @@ const buildMtssAccessProfile = (user) => {
     };
 };
 
-const hasDashboardAccess = (user) => {
-    if (!user) return false;
-
-    if (userHasNativeDashboardRole(user.role)) {
-        return true;
-    }
-
-    const profile = user.dashboardAccess || buildDashboardAccessProfile(user);
-    return profile.hasDelegatedAccess && profile.scope.includes('emotional_dashboard');
-};
-
-const getEffectiveDashboardRole = (user) => {
-    if (!user) return null;
-    if (user.dashboardRole) {
-        return user.dashboardRole;
-    }
-    if (user.dashboardAccess?.effectiveRole) {
-        return user.dashboardAccess.effectiveRole;
-    }
-    const profile = buildDashboardAccessProfile(user);
-    return profile.effectiveRole || user.role || null;
-};
-
 const hasMtssAccess = (user) => {
     if (!user) return false;
     const profile = user.mtssAccess || buildMtssAccessProfile(user);
@@ -246,10 +162,6 @@ const hasMtssWriteAccess = (user) => {
 };
 
 module.exports = {
-    DEFAULT_DASHBOARD_ROLES: Array.from(DEFAULT_DASHBOARD_ROLES),
-    buildDashboardAccessProfile,
-    hasDashboardAccess,
-    getEffectiveDashboardRole,
     buildMtssAccessProfile,
     hasMtssAccess,
     hasMtssAdminAccess,

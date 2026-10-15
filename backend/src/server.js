@@ -5,7 +5,7 @@ require('dotenv').config();
 // Import app and initialization
 const { app, initializeApp } = require('./app');
 const { initSocket } = require('./config/socket');
-const employeeRosterSync = require('./jobs/employeeRosterSync');
+const centralSync = require('./jobs/centralSync');
 
 // Configure Winston logger
 winston.configure({
@@ -48,7 +48,12 @@ const PORT = process.env.PORT || 3001;
 
 const startServer = async () => {
     try {
-        // Start HTTP server
+        const initialized = await initializeApp();
+        if (!initialized) {
+            throw new Error('Application initialization failed; refusing to accept traffic');
+        }
+
+        // Start HTTP server only after required database indexes and services are ready.
         server.listen(PORT, () => {
             winston.info(`Server running on port ${PORT}`);
             winston.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
@@ -58,21 +63,10 @@ const startServer = async () => {
             winston.info(`FRONTEND_URL: ${process.env.FRONTEND_URL || 'NOT SET (will use localhost:5173)'}`);
         });
 
-        initializeApp().then((initialized) => {
-            if (initialized) {
-                winston.info('Background initialization completed successfully');
-                return;
-            }
-
-            winston.warn('Background initialization completed with readiness disabled');
-        }).catch((error) => {
-            winston.error('Background initialization crashed:', error);
-        });
-
         // Graceful shutdown handling
         process.on('SIGTERM', () => {
             winston.info('SIGTERM received, shutting down gracefully');
-            employeeRosterSync.stop();
+            centralSync.stop();
             server.close(() => {
                 winston.info('Process terminated');
                 process.exit(0);
@@ -81,7 +75,7 @@ const startServer = async () => {
 
         process.on('SIGINT', () => {
             winston.info('SIGINT received, shutting down gracefully');
-            employeeRosterSync.stop();
+            centralSync.stop();
             server.close(() => {
                 winston.info('Process terminated');
                 process.exit(0);

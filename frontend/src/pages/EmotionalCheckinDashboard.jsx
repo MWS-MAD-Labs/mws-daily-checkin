@@ -11,11 +11,10 @@ import SummaryModal from "./dashboard/components/SummaryModal";
 import { useToast } from "@/components/ui/use-toast";
 import { getTodayCalendarDateKey } from "./dashboard/utils/calendarDate";
 import {
-    getEmotionalDashboardRole,
-    hasEmotionalDashboardAccess,
-    hasDelegatedDashboardAccess,
-    getDelegatedDashboardDetails
+    getDashboardScopeMode,
+    hasDashboard
 } from "@/utils/accessControl";
+import { DASHBOARD, SCOPE_MODE } from "@/constants/enums";
 
 // Optimized imports - split into logical components
 const DashboardHeader = lazy(() =>
@@ -44,14 +43,12 @@ const EmotionalCheckinDashboard = memo(function EmotionalCheckinDashboard() {
     const todayISO = useMemo(() => getTodayCalendarDateKey(), []);
     const [pendingDate, setPendingDate] = useState(selectedDate || todayISO);
 
-    const dashboardRole = useMemo(() => getEmotionalDashboardRole(user), [user]);
-    const canViewDashboard = useMemo(() => hasEmotionalDashboardAccess(user), [user]);
-    const delegatedDashboardDetails = useMemo(() => getDelegatedDashboardDetails(user), [user]);
-    const delegatedDashboardAccess = hasDelegatedDashboardAccess(user);
+    const canViewDashboard = useMemo(() => hasDashboard(user, DASHBOARD.STAFF), [user]);
+    const scopeMode = getDashboardScopeMode(user, DASHBOARD.STAFF);
 
-    // Check if user is head_unit for special UI elements
-    const isHeadUnit = dashboardRole === 'head_unit';
-    const isDirectorate = ['directorate', 'admin', 'superadmin'].includes(dashboardRole || '');
+    // The unit scope sees one unit, the all scope sees the whole school.
+    const isHeadUnit = scopeMode === SCOPE_MODE.UNIT;
+    const isDirectorate = scopeMode === SCOPE_MODE.ALL;
     const [filters, setFilters] = useState({});
     const directorateAutoPeriodApplied = useRef(false);
     const emailActionHandledRef = useRef(null);
@@ -283,21 +280,6 @@ const EmotionalCheckinDashboard = memo(function EmotionalCheckinDashboard() {
             </Suspense>
 
             <div className="relative z-10 container-tight py-4 md:py-6">
-                {delegatedDashboardAccess && delegatedDashboardDetails && (
-                    <div className="glass glass-card p-4 mb-4 flex items-start gap-3 border border-amber-200/70 bg-amber-50/70 dark:bg-amber-500/10">
-                        <ShieldCheck className="w-5 h-5 text-amber-600 dark:text-amber-300 mt-0.5" />
-                        <div className="text-sm text-muted-foreground">
-                            <p className="font-semibold text-foreground">Delegated dashboard access</p>
-                            <p>
-                                You're viewing the Emotional Check-in Dashboard with the same visibility as{" "}
-                                <span className="font-medium text-foreground">
-                                    {delegatedDashboardDetails.delegatedFromName || delegatedDashboardDetails.delegatedFromEmail || 'the assigned directorate lead'}
-                                </span>
-                                . All actions remain logged under your account.
-                            </p>
-                        </div>
-                    </div>
-                )}
 
                 <Suspense fallback={<LoadingFallback />}>
                     {/* Dashboard Header */}

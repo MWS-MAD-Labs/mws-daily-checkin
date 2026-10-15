@@ -1,3 +1,5 @@
+import { ASSISTANT_PROFILE } from '@/constants/enums';
+
 const normalizeText = (value = '') => String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
 const toArray = (value) => (Array.isArray(value) ? value : []);
 
@@ -67,19 +69,11 @@ const detectRouteFamily = (pathname = '') => {
     return 'general';
 };
 
-const MTSS_AUTOMATION_ROLES = new Set([
-    'teacher',
-    'se_teacher',
-    'head_unit',
-    'principal',
-    'directorate',
-    'admin',
-    'superadmin'
-]);
+const MTSS_AUTOMATION_ROLES = new Set([ASSISTANT_PROFILE.TEACHER, ASSISTANT_PROFILE.LEADER, ASSISTANT_PROFILE.ADMIN]);
 
-const isStudentRole = (role = '') => String(role || '').trim().toLowerCase() === 'student';
-const isTeacherScopeRole = (role = '') => ['teacher', 'se_teacher', 'head_unit', 'principal'].includes(String(role || '').trim().toLowerCase());
-const isLeadershipRole = (role = '') => ['head_unit', 'principal', 'directorate', 'admin', 'superadmin'].includes(String(role || '').trim().toLowerCase());
+const isStudentRole = (role = '') => String(role || '').trim().toLowerCase() === ASSISTANT_PROFILE.STUDENT;
+const isTeacherScopeRole = (role = '') => [ASSISTANT_PROFILE.TEACHER, ASSISTANT_PROFILE.LEADER].includes(String(role || '').trim().toLowerCase());
+const isLeadershipRole = (role = '') => [ASSISTANT_PROFILE.LEADER, ASSISTANT_PROFILE.ADMIN].includes(String(role || '').trim().toLowerCase());
 
 const getCommandPackByRoute = (routeFamily = 'general', role = '') => {
     const student = isStudentRole(role);

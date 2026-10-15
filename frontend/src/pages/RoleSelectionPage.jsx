@@ -2,12 +2,9 @@ import { memo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Heart, Brain, Sparkles, ArrowRight, BarChart3, Shield } from "lucide-react";
 import { useSelector } from "react-redux";
-import {
-  hasEmotionalDashboardAccess,
-  getEmotionalDashboardRole,
-  hasDelegatedDashboardAccess,
-  getDelegatedDashboardDetails
-} from "@/utils/accessControl";
+import { getDashboardScopeMode, hasDashboard, hasPermission } from "@/utils/accessControl";
+import { DASHBOARD, SCOPE_MODE } from "@/constants/enums";
+import { PERMISSIONS } from "@/constants/permissions";
 import { prefetchStaffFaceScanOnIntent } from "@/utils/faceScanPrefetch";
 import gsap from "gsap";
 import "@/pages/styles/role-selection-humanistic.css";
@@ -260,10 +257,11 @@ const RoleSelection = memo(() => {
   const { user, loading } = useSelector((state) => state.auth);
   const pageRef = useRef(null);
 
-  const canAccessDashboard = user && hasEmotionalDashboardAccess(user);
-  const effectiveDashboardRole = getEmotionalDashboardRole(user);
-  const delegatedDashboardAccess = hasDelegatedDashboardAccess(user);
-  const delegatedDashboardDetails = getDelegatedDashboardDetails(user);
+  const canAccessDashboard = hasDashboard(user, DASHBOARD.STAFF);
+  const staffScope = getDashboardScopeMode(user, DASHBOARD.STAFF);
+  const studentScope = getDashboardScopeMode(user, DASHBOARD.STUDENT);
+  const canSubmitCheckin = hasPermission(user, PERMISSIONS.CHECKIN_SELF_SUBMIT);
+  const canManageUsers = hasPermission(user, PERMISSIONS.USERS_READ);
 
   /* GSAP entrance */
   useEffect(() => {
@@ -412,23 +410,16 @@ const RoleSelection = memo(() => {
     "Organization-wide support tracking", "Cross-department mood & weather patterns",
     "Individual employee deep-dive analysis", "Period-based reporting (daily/weekly/monthly/semesterly)"
   ];
-  if (delegatedDashboardAccess && delegatedDashboardDetails) {
-    directorateFeatures.unshift(
-      `Mirrors ${delegatedDashboardDetails.delegatedFromName || delegatedDashboardDetails.delegatedFromEmail || 'directorate'} dashboard access`
-    );
-  }
+  const isUnitStaffScope = staffScope === SCOPE_MODE.UNIT;
+  const dashboardDescription = isUnitStaffScope
+    ? "Monitor your unit's emotional wellness and support requests"
+    : "Access comprehensive emotional wellness data for all employees";
 
-  const dashboardDescription = effectiveDashboardRole === 'head_unit'
-    ? "Monitor your team's emotional wellness and support requests"
-    : delegatedDashboardAccess && delegatedDashboardDetails
-      ? `Access the organization-wide dashboard entrusted to ${delegatedDashboardDetails.delegatedFromName || delegatedDashboardDetails.delegatedFromEmail}`
-      : "Access comprehensive emotional wellness data for all employees";
+  const dashboardFeatures = isUnitStaffScope ? headUnitFeatures : directorateFeatures;
 
-  const dashboardFeatures = effectiveDashboardRole === 'head_unit' ? headUnitFeatures : directorateFeatures;
-
-  const isTeacherRole = user && ['teacher', 'se_teacher'].includes(user.role);
-  const isPrincipalRole = user && ['head_unit', 'directorate', 'admin', 'superadmin'].includes(user.role);
-  const studentDashboardFeatures = isPrincipalRole
+  const canOpenStudentDashboard = studentScope !== SCOPE_MODE.NONE;
+  const isWideStudentScope = studentScope === SCOPE_MODE.UNIT || studentScope === SCOPE_MODE.ALL;
+  const studentDashboardFeatures = isWideStudentScope
     ? ["Student emotional overview by grade and class", "Needs-support spotlight for faster follow up", "Unit-aligned scope for each principal", "Quick search and daily refresh monitoring"]
     : ["Class-scoped student check-ins", "Daily submission tracking", "Needs support highlights", "Quick search by student"];
 
@@ -478,6 +469,7 @@ const RoleSelection = memo(() => {
 
           {/* Cards */}
           <div className="space-y-3">
+            {canSubmitCheckin && (<>
             <MethodCard icon={Heart} title="Manual Check-in"
               desc="Traditional form-based assessment with weather metaphors and detailed reflection"
               features={["Weather-based mood selection", "Detailed emotional reflection", "Presence & capacity ratings", "Support contact selection"]}
@@ -487,26 +479,27 @@ const RoleSelection = memo(() => {
               desc="Face scan technology detects authentic micro-expressions beyond conscious control"
               features={["Real-time facial expression analysis", "43 landmark micro-expression detection", "AI psychologist insights & recommendations", "Detects concealed emotions accurately"]}
               isPremium={true} onIntent={prefetchStaffFaceScanOnIntent} onClick={() => selectMethod('ai')} delay={0.45} />
+            </>)}
 
-            {(isTeacherRole || isPrincipalRole) && (
+            {canOpenStudentDashboard && (
               <MethodCard icon={BarChart3}
-                title={isPrincipalRole ? "Student Emotional Dashboard" : "Student Daily Check-in Dashboard"}
-                desc={isPrincipalRole ? "Monitor emotional wellbeing for students in your unit with grade-aware filtering." : "Review daily check-ins for your assigned class and track support needs."}
+                title={isWideStudentScope ? "Student Emotional Dashboard" : "Student Daily Check-in Dashboard"}
+                desc={isWideStudentScope ? "Monitor emotional wellbeing for students in your unit with grade-aware filtering." : "Review daily check-ins for your assigned class and track support needs."}
                 features={studentDashboardFeatures} isPremium={false}
                 onClick={() => selectMethod('teacher-dashboard')} delay={0.55} />
             )}
 
             {canAccessDashboard && (
               <MethodCard icon={BarChart3}
-                title={effectiveDashboardRole === 'head_unit' ? "Unit Dashboard" : "Emotional Checkin Dashboard"}
+                title={isUnitStaffScope ? "Unit Dashboard" : "Emotional Checkin Dashboard"}
                 desc={dashboardDescription} features={dashboardFeatures}
                 isPremium={false} onClick={() => selectMethod('dashboard')} delay={0.6} />
             )}
 
-            {(user && ['directorate', 'admin', 'superadmin'].includes(user.role)) && (
+            {canManageUsers && (
               <MethodCard icon={BarChart3} title="User Management"
-                desc="Manage users, roles, and organizational structure"
-                features={["User account management", "Role and permission settings", "Organizational hierarchy", "Advanced user analytics"]}
+                desc="See the people synced from Central and their check-in analytics"
+                features={["User directory", "Unit and job level filters", "Account details", "Advanced user analytics"]}
                 isPremium={false} onClick={() => navigate('/user-management')} delay={0.65} />
             )}
 

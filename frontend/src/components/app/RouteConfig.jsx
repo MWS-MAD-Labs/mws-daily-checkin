@@ -4,10 +4,10 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import PageLoader from "@/components/PageLoader";
 import PageTransition from "./PageTransition";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import { useSelector } from "react-redux";
+import { DASHBOARD, PERSON_TYPE } from "@/constants/enums";
+import { PERMISSIONS as P } from "@/constants/permissions";
+import RootRedirect from "./RootRedirect";
 
-const LandingPage = lazy(() => import(/* webpackPrefetch: true */ '@/pages/LandingPage'));
-const AuthCallback = lazy(() => import(/* webpackPrefetch: true */ '@/pages/AuthCallback'));
 const AccountNotFoundPage = lazy(() => import(/* webpackPrefetch: true */ '@/pages/AccountNotFoundPage'));
 const EmotionalCheckinFaceScanPage = lazy(() => import('@/pages/VerificationPage'));
 const ProfilePage = lazy(() => import(/* webpackPrefetch: true */ '@/pages/ProfilePage'));
@@ -37,86 +37,57 @@ const MemoizedPageTransition = memo(({ children }) => (
 ));
 MemoizedPageTransition.displayName = 'MemoizedPageTransition';
 
-const AdminProtectedRoute = memo(({ children }) => {
-    const { user } = useSelector((state) => state.auth);
-
-    const hasAdminAccess = user && (
-        user.role === 'directorate' ||
-        user.role === 'superadmin' ||
-        user.role === 'admin'
-    );
-
-    if (!hasAdminAccess) {
-        return (
-            <MemoizedPageTransition>
-                <div className="min-h-screen flex items-center justify-center">
-                    <div className="glass glass-card p-8 text-center">
-                        <h2 className="text-2xl font-bold text-destructive mb-4">Access Denied</h2>
-                        <p className="text-muted-foreground">
-                            You don't have permission to access this page.
-                        </p>
-                    </div>
-                </div>
-            </MemoizedPageTransition>
-        );
-    }
-
-    return <MemoizedPageTransition>{children}</MemoizedPageTransition>;
-});
-AdminProtectedRoute.displayName = 'AdminProtectedRoute';
-
 const publicRoutes = [
-    <Route key="landing" path="/" element={<MemoizedPageTransition><LandingPage /></MemoizedPageTransition>} />,
-    <Route key="auth-callback" path="/auth/callback" element={<MemoizedPageTransition><AuthCallback /></MemoizedPageTransition>} />,
+    <Route key="landing" path="/" element={<RootRedirect />} />,
     <Route key="account-not-found" path="/account-not-found" element={<MemoizedPageTransition><AccountNotFoundPage /></MemoizedPageTransition>} />,
-    <Route key="face-scan" path="/emotional-checkin/face-scan" element={<MemoizedPageTransition><EmotionalCheckinFaceScanPage /></MemoizedPageTransition>} />,
+    <Route key="face-scan" path="/emotional-checkin/face-scan" element={<ProtectedRoute anyPermission={[P.CHECKIN_SELF_SUBMIT]}><MemoizedPageTransition><EmotionalCheckinFaceScanPage /></MemoizedPageTransition></ProtectedRoute>} />,
     // This is now nested inside the app-level /daily-checkin basename
     // (main.jsx), so its own path can't also be "/daily-checkin" - that
     // would collide with the landing page's own path="/" once combined
     // (both would resolve to the app's bare root). Also can't be bare "/"
     // itself, since that's the public LandingPage route above. "/home" is
     // the actual final URL /daily-checkin/home.
-    <Route key="daily-checkin-home" path="/home" element={<ProtectedRoute allowedRoles={['staff', 'support_staff', 'nurse', 'counselor', 'teacher', 'se_teacher', 'head_unit', 'principal', 'directorate', 'admin', 'superadmin']}><MemoizedPageTransition><RoleSelectionPage /></MemoizedPageTransition></ProtectedRoute>} />,
+    <Route key="daily-checkin-home" path="/home" element={<ProtectedRoute personType={PERSON_TYPE.EMPLOYEE}><MemoizedPageTransition><RoleSelectionPage /></MemoizedPageTransition></ProtectedRoute>} />,
     // Old URLs kept working as redirects, not 404s, for anyone with a bookmark/link from before the rename.
     <Route key="select-role-redirect" path="/select-role" element={<Navigate to="/home" replace />} />,
     <Route key="profile" path="/profile" element={<ProtectedRoute><MemoizedPageTransition><ProfilePage /></MemoizedPageTransition></ProtectedRoute>} />,
-    <Route key="notifications" path="/notifications" element={<ProtectedRoute><MemoizedPageTransition><NotificationPage /></MemoizedPageTransition></ProtectedRoute>} />,
-    <Route key="notifications-settings" path="/notifications/settings" element={<ProtectedRoute><MemoizedPageTransition><NotificationSettingsPage /></MemoizedPageTransition></ProtectedRoute>} />,
-    <Route key="emotional-checkin" path="/emotional-checkin" element={<MemoizedPageTransition><EmotionalCheckinPage /></MemoizedPageTransition>} />,
-    <Route key="emotional-checkin-staff" path="/emotional-checkin/staff" element={<ProtectedRoute><MemoizedPageTransition><EmotionalCheckinStaffPage /></MemoizedPageTransition></ProtectedRoute>} />,
-    <Route key="rate" path="/emotional-checkin/rate" element={<ProtectedRoute><MemoizedPageTransition><RatingPage /></MemoizedPageTransition></ProtectedRoute>} />,
-    <Route key="rate-with-id" path="/emotional-checkin/rate/:checkinId" element={<ProtectedRoute><MemoizedPageTransition><RatingPage /></MemoizedPageTransition></ProtectedRoute>} />,
-    <Route key="emotional-checkin-dashboard" path="/emotional-checkin/dashboard" element={<ProtectedRoute requireDirectorateAcademic={true}><MemoizedPageTransition><EmotionalCheckinDashboard /></MemoizedPageTransition></ProtectedRoute>} />,
+    <Route key="notifications" path="/notifications" element={<ProtectedRoute anyPermission={[P.NOTIFICATIONS_SELF_MANAGE]}><MemoizedPageTransition><NotificationPage /></MemoizedPageTransition></ProtectedRoute>} />,
+    <Route key="notifications-settings" path="/notifications/settings" element={<ProtectedRoute anyPermission={[P.NOTIFICATIONS_SELF_MANAGE]}><MemoizedPageTransition><NotificationSettingsPage /></MemoizedPageTransition></ProtectedRoute>} />,
+    <Route key="emotional-checkin" path="/emotional-checkin" element={<ProtectedRoute anyPermission={[P.CHECKIN_SELF_SUBMIT, P.CHECKIN_STUDENT_SUBMIT]}><MemoizedPageTransition><EmotionalCheckinPage /></MemoizedPageTransition></ProtectedRoute>} />,
+    <Route key="emotional-checkin-staff" path="/emotional-checkin/staff" element={<ProtectedRoute anyPermission={[P.CHECKIN_SELF_SUBMIT]}><MemoizedPageTransition><EmotionalCheckinStaffPage /></MemoizedPageTransition></ProtectedRoute>} />,
+    <Route key="rate" path="/emotional-checkin/rate" element={<ProtectedRoute anyPermission={[P.CHECKIN_SELF_SUBMIT, P.CHECKIN_STUDENT_SUBMIT]}><MemoizedPageTransition><RatingPage /></MemoizedPageTransition></ProtectedRoute>} />,
+    <Route key="rate-with-id" path="/emotional-checkin/rate/:checkinId" element={<ProtectedRoute anyPermission={[P.CHECKIN_SELF_SUBMIT, P.CHECKIN_STUDENT_SUBMIT]}><MemoizedPageTransition><RatingPage /></MemoizedPageTransition></ProtectedRoute>} />,
+    <Route key="emotional-checkin-dashboard" path="/emotional-checkin/dashboard" element={<ProtectedRoute dashboard={DASHBOARD.STAFF}><MemoizedPageTransition><EmotionalCheckinDashboard /></MemoizedPageTransition></ProtectedRoute>} />,
     <Route
         key="emotional-checkin-teacher-dashboard"
         path="/emotional-checkin/teacher-dashboard"
         element={
-            <ProtectedRoute allowedRoles={['teacher', 'se_teacher', 'head_unit', 'directorate', 'admin', 'superadmin']}>
+            <ProtectedRoute dashboard={DASHBOARD.STUDENT}>
                 <MemoizedPageTransition>
                     <EmotionalCheckinTeacherDashboard />
                 </MemoizedPageTransition>
             </ProtectedRoute>
         }
     />,
-    <Route key="emotional-checkin-not-submitted" path="/emotional-checkin/not-submitted" element={<ProtectedRoute requireDirectorateAcademic={true}><MemoizedPageTransition><NotSubmittedUsersPage /></MemoizedPageTransition></ProtectedRoute>} />,
-    <Route key="emotional-wellness" path="/emotional-wellness" element={<ProtectedRoute><MemoizedPageTransition><EmotionalWellnessPage /></MemoizedPageTransition></ProtectedRoute>} />,
-    <Route key="emotional-wellness-user" path="/emotional-wellness/:userId" element={<ProtectedRoute><MemoizedPageTransition><EmotionalWellnessPage /></MemoizedPageTransition></ProtectedRoute>} />,
-    <Route key="personal-stats" path="/profile/personal-stats" element={<ProtectedRoute><MemoizedPageTransition><PersonalStatsPage /></MemoizedPageTransition></ProtectedRoute>} />,
-    <Route key="personal-stats-user" path="/profile/personal-stats/:userId" element={<ProtectedRoute><MemoizedPageTransition><PersonalStatsPage /></MemoizedPageTransition></ProtectedRoute>} />,
-    <Route key="emotional-history" path="/profile/emotional-history" element={<ProtectedRoute><MemoizedPageTransition><EmotionalHistoryPage /></MemoizedPageTransition></ProtectedRoute>} />,
-    <Route key="emotional-history-user" path="/profile/emotional-history/:userId" element={<ProtectedRoute><MemoizedPageTransition><EmotionalHistoryPage /></MemoizedPageTransition></ProtectedRoute>} />,
-    <Route key="emotional-patterns" path="/profile/emotional-patterns" element={<ProtectedRoute><MemoizedPageTransition><EmotionalPatternsPage /></MemoizedPageTransition></ProtectedRoute>} />,
-    <Route key="emotional-patterns-user" path="/profile/emotional-patterns/:userId" element={<ProtectedRoute><MemoizedPageTransition><EmotionalPatternsPage /></MemoizedPageTransition></ProtectedRoute>} />,
-    <Route key="user-management" path="/user-management" element={<AdminProtectedRoute><UserManagementDashboard /></AdminProtectedRoute>} />,
+    <Route key="emotional-checkin-not-submitted" path="/emotional-checkin/not-submitted" element={<ProtectedRoute dashboard={DASHBOARD.STAFF}><MemoizedPageTransition><NotSubmittedUsersPage /></MemoizedPageTransition></ProtectedRoute>} />,
+    <Route key="emotional-wellness" path="/emotional-wellness" element={<ProtectedRoute anyPermission={[P.CHECKIN_SELF_READ]}><MemoizedPageTransition><EmotionalWellnessPage /></MemoizedPageTransition></ProtectedRoute>} />,
+    <Route key="emotional-wellness-user" path="/emotional-wellness/:userId" element={<ProtectedRoute anyPermission={[P.CHECKIN_SELF_READ]}><MemoizedPageTransition><EmotionalWellnessPage /></MemoizedPageTransition></ProtectedRoute>} />,
+    <Route key="personal-stats" path="/profile/personal-stats" element={<ProtectedRoute anyPermission={[P.CHECKIN_SELF_READ]}><MemoizedPageTransition><PersonalStatsPage /></MemoizedPageTransition></ProtectedRoute>} />,
+    <Route key="personal-stats-user" path="/profile/personal-stats/:userId" element={<ProtectedRoute anyPermission={[P.CHECKIN_SELF_READ]}><MemoizedPageTransition><PersonalStatsPage /></MemoizedPageTransition></ProtectedRoute>} />,
+    <Route key="emotional-history" path="/profile/emotional-history" element={<ProtectedRoute anyPermission={[P.CHECKIN_SELF_READ]}><MemoizedPageTransition><EmotionalHistoryPage /></MemoizedPageTransition></ProtectedRoute>} />,
+    <Route key="emotional-history-user" path="/profile/emotional-history/:userId" element={<ProtectedRoute anyPermission={[P.CHECKIN_SELF_READ]}><MemoizedPageTransition><EmotionalHistoryPage /></MemoizedPageTransition></ProtectedRoute>} />,
+    <Route key="emotional-patterns" path="/profile/emotional-patterns" element={<ProtectedRoute anyPermission={[P.CHECKIN_SELF_READ]}><MemoizedPageTransition><EmotionalPatternsPage /></MemoizedPageTransition></ProtectedRoute>} />,
+    <Route key="emotional-patterns-user" path="/profile/emotional-patterns/:userId" element={<ProtectedRoute anyPermission={[P.CHECKIN_SELF_READ]}><MemoizedPageTransition><EmotionalPatternsPage /></MemoizedPageTransition></ProtectedRoute>} />,
+    <Route key="user-management" path="/user-management" element={<ProtectedRoute anyPermission={[P.USERS_READ]}><MemoizedPageTransition><UserManagementDashboard /></MemoizedPageTransition></ProtectedRoute>} />,
     // /support-hub used to render its own mocked clone of Hub's app-launcher
     // UI - removed as a duplicate of the real Hub (a separate domain/app).
     // Kept as a redirect, not a 404, for anyone with an old bookmark/link.
     <Route key="support-hub" path="/support-hub" element={<Navigate to="/home" replace />} />,
-    <Route key="student-emotional-checkin" path="/student/emotional-checkin" element={<ProtectedRoute allowedRoles={['student']}><MemoizedPageTransition><StudentEmotionalCheckinPage /></MemoizedPageTransition></ProtectedRoute>} />,
-    <Route key="student-face-scan" path="/student/emotional-checkin/face-scan" element={<ProtectedRoute allowedRoles={['student']}><MemoizedPageTransition><StudentFaceScanPage /></MemoizedPageTransition></ProtectedRoute>} />,
-    <Route key="student-manual-checkin" path="/student/emotional-checkin/manual" element={<ProtectedRoute allowedRoles={['student']}><MemoizedPageTransition><StudentManualCheckinPage /></MemoizedPageTransition></ProtectedRoute>} />,
-    <Route key="student-ai-checkin" path="/student/emotional-checkin/ai" element={<ProtectedRoute allowedRoles={['student']}><MemoizedPageTransition><StudentAICheckinPage /></MemoizedPageTransition></ProtectedRoute>} />,
-    <Route key="student-support-hub" path="/student/support-hub" element={<ProtectedRoute allowedRoles={['student']}><MemoizedPageTransition><StudentSupportHubPage /></MemoizedPageTransition></ProtectedRoute>} />,
+    <Route key="student-emotional-checkin" path="/student/emotional-checkin" element={<ProtectedRoute personType={PERSON_TYPE.STUDENT} anyPermission={[P.CHECKIN_STUDENT_SUBMIT]}><MemoizedPageTransition><StudentEmotionalCheckinPage /></MemoizedPageTransition></ProtectedRoute>} />,
+    <Route key="student-face-scan" path="/student/emotional-checkin/face-scan" element={<ProtectedRoute personType={PERSON_TYPE.STUDENT} anyPermission={[P.CHECKIN_STUDENT_SUBMIT]}><MemoizedPageTransition><StudentFaceScanPage /></MemoizedPageTransition></ProtectedRoute>} />,
+    <Route key="student-manual-checkin" path="/student/emotional-checkin/manual" element={<ProtectedRoute personType={PERSON_TYPE.STUDENT} anyPermission={[P.CHECKIN_STUDENT_SUBMIT]}><MemoizedPageTransition><StudentManualCheckinPage /></MemoizedPageTransition></ProtectedRoute>} />,
+    <Route key="student-ai-checkin" path="/student/emotional-checkin/ai" element={<ProtectedRoute personType={PERSON_TYPE.STUDENT} anyPermission={[P.CHECKIN_STUDENT_SUBMIT]}><MemoizedPageTransition><StudentAICheckinPage /></MemoizedPageTransition></ProtectedRoute>} />,
+    <Route key="student-support-hub" path="/student/support-hub" element={<ProtectedRoute personType={PERSON_TYPE.STUDENT} anyPermission={[P.SUPPORT_CONTACTS_READ]}><MemoizedPageTransition><StudentSupportHubPage /></MemoizedPageTransition></ProtectedRoute>} />,
 ];
 
 const RouteConfig = memo(() => (

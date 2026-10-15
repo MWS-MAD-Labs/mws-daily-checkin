@@ -1,52 +1,19 @@
 const express = require('express');
 const router = express.Router();
-const {
-    getUsers,
-    getUserById,
-    createUser,
-    updateUser,
-    deleteUser,
-    getOrganizationStructure,
-    assignUserToOrganization,
-    getOrganizationMembers,
-    getUserOrganizations,
-    createOrganization
-} = require('../controllers/userController');
-const { authenticate, requireAdmin, requireSuperAdmin } = require('../middleware/auth');
-const { validate, validateQuery } = require('../middleware/validation');
-const { userCreateSchema, userUpdateSchema, paginationSchema } = require('../utils/validationSchemas');
+const { getUsers, getUserById, getOrganizationStructure } = require('../controllers/userController');
+const { authenticate, requirePermission } = require('../middleware/auth');
+const { PERMISSIONS } = require('../constants/permissions');
+const { validateQuery } = require('../middleware/validation');
+const { paginationSchema } = require('../utils/validationSchemas');
 
-// All routes require authentication
+// Users and organizations are managed in Central, so this is read-only.
 router.use(authenticate);
 
-// Get organization structure (available to directorate and above)
-router.get('/organization', requireAdmin, getOrganizationStructure);
+// Filter options and headcount stats
+router.get('/organization', requirePermission(PERMISSIONS.USERS_READ), getOrganizationStructure);
 
-// Get all users with filtering and pagination (allow directorate access)
-router.get('/', requireAdmin, validateQuery(paginationSchema), getUsers);
+router.get('/', requirePermission(PERMISSIONS.USERS_READ), validateQuery(paginationSchema), getUsers);
 
-// Get user by ID
-router.get('/:id', requireAdmin, getUserById);
-
-// Create new user (admin only)
-router.post('/', requireAdmin, validate(userCreateSchema), createUser);
-
-// Update user
-router.put('/:id', requireAdmin, validate(userUpdateSchema), updateUser);
-
-// Delete user (soft delete)
-router.delete('/:id', requireSuperAdmin, deleteUser);
-
-// Assign user to organization
-router.post('/assign-organization', requireAdmin, assignUserToOrganization);
-
-// Get organization members
-router.get('/organization/:organizationId/members', requireAdmin, getOrganizationMembers);
-
-// Get user's organizations
-router.get('/:userId/organizations', requireAdmin, getUserOrganizations);
-
-// Create organization
-router.post('/organization', requireAdmin, createOrganization);
+router.get('/:id', requirePermission(PERMISSIONS.USERS_READ), getUserById);
 
 module.exports = router;

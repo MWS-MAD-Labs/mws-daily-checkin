@@ -2,7 +2,8 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const router = express.Router();
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requirePermission } = require('../middleware/auth');
+const { PERMISSIONS } = require('../constants/permissions');
 const { sendError } = require('../utils/response');
 
 // Backend-for-Frontend proxy for the AI chat feature, which is actually
@@ -17,6 +18,7 @@ const { sendError } = require('../utils/response');
 // person in both databases. See mws-mtss-system's authenticateServiceRelay
 // (middleware/auth.js) for the receiving side of this handshake.
 router.use(authenticate);
+router.use(requirePermission(PERMISSIONS.ASSISTANT_USE));
 
 const mtssBaseUrl = (process.env.MTSS_API_BASE_URL || '').replace(/\/+$/, '');
 const mtssClient = axios.create({

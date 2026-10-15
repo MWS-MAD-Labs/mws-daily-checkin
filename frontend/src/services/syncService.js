@@ -1,11 +1,7 @@
 import api from './authService';
 
+// The sync with Central runs by itself on the server. This only reads how it is doing.
 export const getSyncStatus = async () => {
     const response = await api.get('/sync/status', { skipGlobalLoading: true });
-    return response;
-};
-
-export const triggerSync = async () => {
-    const response = await api.post('/sync/trigger', {}, { skipGlobalLoading: true });
-    return response;
+    return response.data?.data || null;
 };
