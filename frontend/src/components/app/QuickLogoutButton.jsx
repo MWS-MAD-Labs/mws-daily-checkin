@@ -431,8 +431,7 @@ const QuickMenu = memo(() => {
                                 {loading ? "Opening the Hub…" : "Back to Hub"}
                             </span>
                             <span className="qm-item-meta">→</span>
-                        </button>;
-                        })()}
+                        </button>
                     </div>
                 </div>
             )}

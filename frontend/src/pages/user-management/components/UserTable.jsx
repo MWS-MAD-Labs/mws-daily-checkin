@@ -1,6 +1,6 @@
 import { memo, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { CheckCircle2, Edit, Trash2, Eye, ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
+import { Eye, ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
     Table,
@@ -73,9 +73,6 @@ const UserTable = memo(({
     loading,
     pagination,
     onPageChange,
-    onEditUser,
-    onActivateUser,
-    onDeleteUser,
     onViewUser
 }) => {
     const [sortField, setSortField] = useState('name');
@@ -232,27 +229,6 @@ const UserTable = memo(({
                                                         <Eye className="w-4 h-4 mr-2" />
                                                         View Details
                                                     </DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={() => onEditUser(user)}>
-                                                        <Edit className="w-4 h-4 mr-2" />
-                                                        Edit User
-                                                    </DropdownMenuItem>
-                                                    {user.isActive ? (
-                                                        <DropdownMenuItem
-                                                            onClick={() => onDeleteUser(user._id || user.id)}
-                                                            className="text-destructive"
-                                                        >
-                                                            <Trash2 className="w-4 h-4 mr-2" />
-                                                            Deactivate
-                                                        </DropdownMenuItem>
-                                                    ) : (
-                                                        <DropdownMenuItem
-                                                            onClick={() => onActivateUser(user._id || user.id)}
-                                                            className="text-green-600"
-                                                        >
-                                                            <CheckCircle2 className="w-4 h-4 mr-2" />
-                                                            Activate
-                                                        </DropdownMenuItem>
-                                                    )}
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                         </TableCell>

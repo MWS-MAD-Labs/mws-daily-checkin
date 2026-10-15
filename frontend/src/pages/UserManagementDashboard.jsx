@@ -1,18 +1,12 @@
-import { useState, useEffect, memo, useCallback, useMemo, Suspense, lazy } from "react";
+import { useState, useEffect, memo, useCallback, Suspense, lazy } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { motion, AnimatePresence } from "framer-motion";
 import { Helmet } from "react-helmet";
 import AnimatedPage from "@/components/AnimatedPage";
-import { useToast } from "@/components/ui/use-toast";
-import api from "@/services/authService";
 import {
     fetchUsers,
     fetchOrganizationStructure,
-    createUser,
-    updateUser,
-    deleteUser,
     setFilters,
-    resetFilters,
     clearError
 } from "../store/slices/userSlice";
 
@@ -20,8 +14,6 @@ import {
 const UserStatsOverview = lazy(() => import(/* webpackChunkName: "user-stats" */ "./user-management/components/UserStatsOverview"));
 const UserTable = lazy(() => import(/* webpackChunkName: "user-table" */ "./user-management/components/UserTable"));
 const UserFilters = lazy(() => import(/* webpackChunkName: "user-filters" */ "./user-management/components/UserFilters"));
-const UserForm = lazy(() => import(/* webpackChunkName: "user-form" */ "./user-management/components/UserForm"));
-const OrganizationChart = lazy(() => import(/* webpackChunkName: "org-chart" */ "./user-management/components/OrganizationChart"));
 const UserDetailsModal = lazy(() => import(/* webpackChunkName: "user-details" */ "./user-management/components/UserDetailsModal"));
 
 // Loading fallback component
@@ -39,7 +31,6 @@ LoadingFallback.displayName = 'LoadingFallback';
 
 const UserManagementDashboard = memo(() => {
     const dispatch = useDispatch();
-    const { toast } = useToast();
 
     // Redux state
     const {
@@ -55,11 +46,8 @@ const UserManagementDashboard = memo(() => {
     const { user: currentUser } = useSelector((state) => state.auth);
 
     // Local state
-    const [showUserForm, setShowUserForm] = useState(false);
-    const [editingUser, setEditingUser] = useState(null);
     const [selectedUser, setSelectedUser] = useState(null);
     const [activeTab, setActiveTab] = useState('overview');
-    const [bulkStatusLoading, setBulkStatusLoading] = useState(false);
 
     // Check if user has admin access
     const hasAdminAccess = currentUser && (
@@ -67,29 +55,6 @@ const UserManagementDashboard = memo(() => {
         currentUser.role === 'superadmin' ||
         currentUser.role === 'admin'
     );
-
-    const bulkStatusMode = typeof filters.isActive === 'boolean'
-        ? (filters.isActive ? 'deactivate' : 'activate')
-        : null;
-
-    const bulkStatusUsers = useMemo(() => {
-        if (!bulkStatusMode) return [];
-
-        return users.filter((user) => {
-            const userId = user._id || user.id;
-            const currentUserId = currentUser?.id || currentUser?._id;
-
-            if (bulkStatusMode === 'activate') {
-                return user.isActive === false;
-            }
-
-            return user.isActive === true && String(userId || '') !== String(currentUserId || '');
-        });
-    }, [bulkStatusMode, currentUser, users]);
-
-    const bulkStatusCount = bulkStatusMode
-        ? Math.max(pagination.totalUsers || 0, bulkStatusUsers.length)
-        : 0;
 
     // Load initial data
     useEffect(() => {
@@ -103,164 +68,6 @@ const UserManagementDashboard = memo(() => {
     const handleFiltersChange = useCallback((newFilters) => {
         dispatch(setFilters(newFilters));
     }, [dispatch]);
-
-    // Handle user creation
-    const handleCreateUser = useCallback(async (userData) => {
-        try {
-            await dispatch(createUser(userData)).unwrap();
-            toast({
-                title: "Success",
-                description: "User created successfully",
-            });
-            setShowUserForm(false);
-            // Refresh data after creation
-            dispatch(fetchUsers(filters));
-            dispatch(fetchOrganizationStructure());
-        } catch (error) {
-            toast({
-                title: "Error",
-                description: error || "Failed to create user",
-                variant: "destructive"
-            });
-        }
-    }, [dispatch, toast, filters]);
-
-    // Handle user update
-    const handleUpdateUser = useCallback(async (userId, userData) => {
-        try {
-            await dispatch(updateUser({ userId, userData })).unwrap();
-            toast({
-                title: "Success",
-                description: "User updated successfully",
-            });
-            setEditingUser(null);
-            setShowUserForm(false);
-            // Refresh data after update
-            dispatch(fetchUsers(filters));
-            dispatch(fetchOrganizationStructure());
-        } catch (error) {
-            toast({
-                title: "Error",
-                description: error || "Failed to update user",
-                variant: "destructive"
-            });
-        }
-    }, [dispatch, toast, filters]);
-
-    // Handle user deletion
-    const handleDeleteUser = useCallback(async (userId) => {
-        if (window.confirm('Are you sure you want to deactivate this user?')) {
-            try {
-                await dispatch(deleteUser(userId)).unwrap();
-                toast({
-                    title: "Success",
-                    description: "User deactivated successfully",
-                });
-            } catch (error) {
-                toast({
-                    title: "Error",
-                    description: error || "Failed to deactivate user",
-                    variant: "destructive"
-                });
-            }
-        }
-    }, [dispatch, toast]);
-
-    // Handle user activation
-    const handleActivateUser = useCallback(async (userId) => {
-        try {
-            await dispatch(updateUser({ userId, userData: { isActive: true } })).unwrap();
-            toast({
-                title: "Success",
-                description: "User activated successfully",
-            });
-        } catch (error) {
-            toast({
-                title: "Error",
-                description: error || "Failed to activate user",
-                variant: "destructive"
-            });
-        }
-    }, [dispatch, toast]);
-
-    // Handle filtered users bulk activation/deactivation using existing endpoints.
-    const handleBulkStatusAction = useCallback(async () => {
-        if (!bulkStatusMode || bulkStatusCount === 0) {
-            toast({
-                title: "Nothing to update",
-                description: "No users match this account status filter.",
-            });
-            return;
-        }
-
-        if (bulkStatusMode === 'deactivate') {
-            const confirmed = window.confirm(`Deactivate all filtered active users? Your own account will be skipped.`);
-            if (!confirmed) return;
-        }
-
-        setBulkStatusLoading(true);
-        try {
-            const bulkLimit = Math.max(pagination.totalUsers || users.length || 20, 20);
-            const sourceResponse = await api.get('/users', {
-                params: {
-                    ...filters,
-                    page: 1,
-                    limit: bulkLimit
-                },
-                skipGlobalLoading: true
-            });
-            const sourceUsers = sourceResponse.data?.data?.users || sourceResponse.data?.users || [];
-            const currentUserId = currentUser?.id || currentUser?._id;
-
-            const targetUsers = sourceUsers.filter((user) => {
-                const userId = user._id || user.id;
-
-                if (bulkStatusMode === 'activate') {
-                    return user.isActive === false;
-                }
-
-                return user.isActive === true && String(userId || '') !== String(currentUserId || '');
-            });
-
-            if (targetUsers.length === 0) {
-                toast({
-                    title: "Nothing to update",
-                    description: bulkStatusMode === 'activate'
-                        ? "No inactive users found in this filter."
-                        : "No active users found in this filter.",
-                });
-                dispatch(resetFilters());
-                return;
-            }
-
-            const results = await Promise.allSettled(
-                targetUsers.map((user) => {
-                    const userId = user._id || user.id;
-                    return bulkStatusMode === 'activate'
-                        ? dispatch(updateUser({ userId, userData: { isActive: true }, skipGlobalLoading: true })).unwrap()
-                        : dispatch(deleteUser({ userId, skipGlobalLoading: true })).unwrap();
-                })
-            );
-
-            const successCount = results.filter((result) => result.status === 'fulfilled').length;
-            const failedCount = results.length - successCount;
-
-            toast({
-                title: failedCount ? "Bulk update partially completed" : "Bulk update completed",
-                description: `${successCount} user${successCount === 1 ? '' : 's'} ${bulkStatusMode === 'activate' ? 'activated' : 'deactivated'}${failedCount ? `, ${failedCount} failed` : ''}.`,
-                variant: failedCount ? "destructive" : "default"
-            });
-            dispatch(resetFilters());
-        } catch (error) {
-            toast({
-                title: "Error",
-                description: error || "Failed to bulk update users",
-                variant: "destructive"
-            });
-        } finally {
-            setBulkStatusLoading(false);
-        }
-    }, [bulkStatusCount, bulkStatusMode, currentUser, dispatch, filters, pagination.totalUsers, toast, users.length]);
 
     // Handle pagination
     const handlePageChange = useCallback((page) => {
@@ -313,7 +120,7 @@ const UserManagementDashboard = memo(() => {
                     >
                         <h1 className="text-3xl font-bold mb-2">User Management Dashboard</h1>
                         <p className="text-muted-foreground">
-                            Manage users, roles, and organizational structure
+                            Users and roles are managed in Central
                         </p>
                     </motion.div>
 
@@ -337,7 +144,6 @@ const UserManagementDashboard = memo(() => {
                             {[
                                 { id: 'overview', label: 'Overview', icon: '📊' },
                                 { id: 'users', label: 'Users', icon: '👥' },
-                                { id: 'organization', label: 'Organization', icon: '🏢' },
                                 { id: 'analytics', label: 'Analytics', icon: '📈' }
                             ].map((tab) => (
                                 <button
@@ -389,11 +195,6 @@ const UserManagementDashboard = memo(() => {
                                         <UserFilters
                                             filters={filters}
                                             onFiltersChange={handleFiltersChange}
-                                            onAddUser={() => setShowUserForm(true)}
-                                            bulkStatusMode={bulkStatusMode}
-                                            bulkStatusCount={bulkStatusCount}
-                                            bulkStatusLoading={bulkStatusLoading}
-                                            onBulkStatusAction={handleBulkStatusAction}
                                         />
                                     </Suspense>
 
@@ -404,30 +205,10 @@ const UserManagementDashboard = memo(() => {
                                             loading={loading}
                                             pagination={pagination}
                                             onPageChange={handlePageChange}
-                                            onEditUser={setEditingUser}
-                                            onActivateUser={handleActivateUser}
-                                            onDeleteUser={handleDeleteUser}
                                             onViewUser={setSelectedUser}
                                         />
                                     </Suspense>
                                 </div>
-                            </motion.div>
-                        )}
-
-                        {activeTab === 'organization' && (
-                            <motion.div
-                                key="organization"
-                                initial={{ opacity: 0, x: 20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: -20 }}
-                                transition={{ duration: 0.3 }}
-                            >
-                                <Suspense fallback={<LoadingFallback />}>
-                                    <OrganizationChart
-                                        organizationStructure={organizationStructure}
-                                        users={users}
-                                    />
-                                </Suspense>
                             </motion.div>
                         )}
 
@@ -508,19 +289,6 @@ const UserManagementDashboard = memo(() => {
 
                     {/* Modals */}
                     <AnimatePresence>
-                        {(showUserForm || editingUser) && (
-                            <Suspense fallback={null}>
-                                <UserForm
-                                    user={editingUser}
-                                    onSubmit={editingUser ? handleUpdateUser : handleCreateUser}
-                                    onCancel={() => {
-                                        setShowUserForm(false);
-                                        setEditingUser(null);
-                                    }}
-                                />
-                            </Suspense>
-                        )}
-
                         {selectedUser && (
                             <Suspense fallback={null}>
                                 <UserDetailsModal
