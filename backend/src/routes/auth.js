@@ -3,7 +3,7 @@ const router = express.Router();
 const User = require('../models/User');
 const UserStudent = require('../models/UserStudent');
 const { sendSuccess, sendError } = require('../utils/response');
-const { hasDashboardAccess, hasMtssAccess } = require('../utils/accessControl');
+const { hasMtssAccess } = require('../utils/accessControl');
 const { buildRequestUser } = require('../middleware/auth');
 
 // Signing in and out belong to the Hub. The Hub keeps a short access token in a cookie on the parent domain, every
@@ -38,14 +38,12 @@ router.get('/me', require('../middleware/auth').authenticate, async (req, res) =
         const responseUser = buildRequestUser(user);
 
         // Log role access for security monitoring
-        const canViewDashboard = hasDashboardAccess(responseUser);
         console.log('🔐 /auth/me access - Role validation:', {
             userId: user._id,
             email: user.email,
             role: responseUser.role,
-            dashboardRole: responseUser.dashboardRole,
-            delegatedFrom: responseUser.dashboardAccess?.delegatedFromEmail || null,
-            hasDashboardAccess: canViewDashboard,
+            staffDashboard: responseUser.staffDashboardScope.mode,
+            studentDashboard: responseUser.studentDashboardScope.mode,
             hasMtssAccess: hasMtssAccess(responseUser),
             mtssRole: responseUser.mtssRole || null,
             department: responseUser.department,

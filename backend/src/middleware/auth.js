@@ -4,18 +4,18 @@ const { sendError } = require('../utils/response');
 const { hubSession } = require('../utils/hubSession');
 const { resolveSessionUser } = require('../utils/hubSessionUser');
 const {
-    buildDashboardAccessProfile,
     buildMtssAccessProfile,
     hasMtssAccess,
     hasMtssAdminAccess,
     hasMtssWriteAccess
 } = require('../utils/accessControl');
+const { resolveStudentScope, resolveStaffScope } = require('../utils/accessScope');
+const { PERSON_TYPE, SCOPE_MODE } = require('../constants/enums');
 
 const buildRequestUser = (user) => {
-    const dashboardAccess = buildDashboardAccessProfile(user);
     const mtssAccess = buildMtssAccessProfile(user);
 
-    return {
+    const requestUser = {
         id: user._id,
         email: user.email,
         name: user.name,
@@ -36,8 +36,6 @@ const buildRequestUser = (user) => {
         joinAcademicYear: user.joinAcademicYear,
         reportsTo: user.reportsTo,
         subordinates: user.subordinates || [],
-        dashboardRole: dashboardAccess.effectiveRole,
-        dashboardAccess,
         mtssRole: mtssAccess.effectiveRole,
         mtssAccess,
         permissions: user.centralEntitlementPermissions || [],
@@ -45,7 +43,13 @@ const buildRequestUser = (user) => {
         entitlementId: user.centralEntitlementId || null,
         entitlementVersion: user.centralEntitlementVersion ?? null,
         entitlementOrganizationId: user.centralEntitlementOrganizationId || null,
+        personType: user.role === 'student' ? PERSON_TYPE.STUDENT : PERSON_TYPE.EMPLOYEE,
     };
+
+    // How much of each dashboard this person may open, worked out from what Central gave them.
+    requestUser.studentDashboardScope = resolveStudentScope(requestUser);
+    requestUser.staffDashboardScope = resolveStaffScope(requestUser);
+    return requestUser;
 };
 
 // Who is making the request: the Hub's access token (a cookie on the parent domain) says who they are, and Central
@@ -76,95 +80,43 @@ const authenticate = async (req, res, next) => {
     }
 };
 
-const requirePermission = (permission) => (req, res, next) => {
-    if (!req.user) return sendError(res, 'Authentication required', 401);
-    if (!req.user.permissions.includes(permission)) return sendError(res, 'Insufficient permissions', 403);
-    next();
-};
-
-const requireAnyPermission = (...permissions) => (req, res, next) => {
-    if (!req.user) return sendError(res, 'Authentication required', 401);
-    if (!permissions.some((permission) => req.user.permissions.includes(permission))) {
-        return sendError(res, 'Insufficient permissions', 403);
-    }
-    next();
-};
-
-// Role-based authorization middleware
-const authorize = (...roles) => {
-    return (req, res, next) => {
-        if (!req.user) {
-            return sendError(res, 'Authentication required', 401);
-        }
-
-        if (!roles.includes(req.user.role)) {
+// A route is gated by what Central gave the person, never by a role kept here. The guard remembers what it asks
+// for so a test can check that every route has one.
+const requireAnyPermission = (...permissions) => {
+    const guard = (req, res, next) => {
+        if (!req.user) return sendError(res, 'Authentication required', 401);
+        if (!permissions.some((permission) => req.user.permissions.includes(permission))) {
             return sendError(res, 'Insufficient permissions', 403);
         }
-
         next();
     };
+    guard.permissions = permissions;
+    return guard;
 };
 
-// Admin and above roles
-const requireAdmin = authorize('admin', 'superadmin', 'directorate');
-const requireMTSSAdmin = authorize('admin', 'superadmin', 'directorate', 'head_unit');
-const requireMTSSAccess = (req, res, next) => {
-    if (!req.user) {
-        return sendError(res, 'Authentication required', 401);
-    }
-    if (!hasMtssAccess(req.user)) {
-        return sendError(res, 'You do not have access to MTSS.', 403);
+const requirePermission = (permission) => requireAnyPermission(permission);
+
+// Reading the dashboard is not enough: the person also needs a scope that shows somebody.
+const requireStaffDashboardScope = (req, res, next) => {
+    if (!req.user) return sendError(res, 'Authentication required', 401);
+    if (req.user.staffDashboardScope.mode === SCOPE_MODE.NONE) {
+        return sendError(res, 'No staff are open to your dashboard', 403);
     }
     next();
 };
 
-const requireMTSSWriteAccess = (req, res, next) => {
-    if (!req.user) {
-        return sendError(res, 'Authentication required', 401);
-    }
-    if (!hasMtssWriteAccess(req.user)) {
-        return sendError(res, 'You do not have write access to MTSS.', 403);
-    }
-    next();
-};
-
-const requireScopedMTSSAdmin = (req, res, next) => {
-    if (!req.user) {
-        return sendError(res, 'Authentication required', 401);
-    }
-    if (!hasMtssAdminAccess(req.user)) {
-        return sendError(res, 'You do not have admin access to MTSS.', 403);
-    }
-    next();
-};
-
-// Super admin and directorate only
-const requireSuperAdmin = authorize('superadmin', 'directorate');
-
-// Staff and teacher access (for their own data) - now includes student for Google OAuth users
-const requireStaffOrTeacher = authorize('staff', 'teacher', 'admin', 'superadmin', 'directorate', 'student', 'support_staff', 'se_teacher', 'head_unit', 'counselor');
-const requireTeacherAccess = authorize('teacher', 'se_teacher');
-
-// Any authenticated user
-const requireAuthenticated = (req, res, next) => {
-    if (!req.user) {
-        return sendError(res, 'Authentication required', 401);
+const requireStudentDashboardScope = (req, res, next) => {
+    if (!req.user) return sendError(res, 'Authentication required', 401);
+    if (req.user.studentDashboardScope.mode === SCOPE_MODE.NONE) {
+        return sendError(res, 'No students are open to your dashboard', 403);
     }
     next();
 };
 
 module.exports = {
     authenticate,
-    authorize,
-    requireAdmin,
-    requireMTSSAdmin,
-    requireMTSSAccess,
-    requireMTSSWriteAccess,
-    requireScopedMTSSAdmin,
-    requireSuperAdmin,
-    requireStaffOrTeacher,
-    requireTeacherAccess,
-    requireAuthenticated,
+    requireStaffDashboardScope,
+    requireStudentDashboardScope,
     buildRequestUser,
     requirePermission,
     requireAnyPermission,

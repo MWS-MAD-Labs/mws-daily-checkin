@@ -5,35 +5,12 @@
 // It runs by hand, from "predev" and in the deploy workflow, with the same .env names the rest of the app reads.
 require('dotenv').config();
 const axios = require('axios');
-const { PERMISSION_VALUES } = require('../constants/permissions');
+const { PERMISSION_VALUES, PERMISSION_DETAILS } = require('../constants/permissions');
 
 // What each permission is for, shown to whoever builds roles in Central.
-const DESCRIPTIONS = {
-    'checkin.self.read': 'See my own check-ins',
-    'checkin.self.submit': 'Submit my own check-in',
-    'support.contacts.read': 'See the support contacts available to me',
-    'notifications.self.manage': 'Manage my own notifications',
-    'assistant.use': 'Use the AI assistant',
-    'student_checkins.read': 'See the check-ins of students',
-    'dashboard.read': 'Open the dashboard',
-    'dashboard.export': 'Export dashboard data',
-    'support_requests.manage': 'Handle support requests',
-    'users.read': 'See users',
-    'users.manage': 'Create and edit users',
-    'users.deactivate': 'Deactivate users',
-    'organizations.manage': 'Manage organizations',
-    'notifications.create': 'Send notifications to others',
-    'sync.read': 'See the status of syncs',
-    'sync.run': 'Run syncs',
-    'dev_topology.read': 'See the development topology',
-    'attendance.self.read': 'See my own attendance',
-    'attendance.self.submit': 'Record my own attendance at the morning gathering point',
-    'attendance.staff.read': 'See staff attendance records',
-    'attendance.export': 'Export staff attendance records',
-    'attendance.settings.manage': 'Configure attendance location and time windows',
-    'attendance.corrections.request': 'Request a correction to my attendance',
-    'attendance.corrections.manage': 'Review and decide attendance corrections',
-};
+const DESCRIPTIONS = Object.fromEntries(
+    Object.entries(PERMISSION_DETAILS).map(([key, detail]) => [key, detail.description]),
+);
 
 const humanize = (key) => {
     const text = key.replace(/[._]/g, ' ');
@@ -42,7 +19,10 @@ const humanize = (key) => {
 
 // The permissions of the code, as Central takes them.
 function buildManifest(values = PERMISSION_VALUES) {
-    return values.map((key) => ({ key, description: DESCRIPTIONS[key] || humanize(key) }));
+    return values.map((key) => {
+        const requires = PERMISSION_DETAILS[key]?.requires;
+        return { key, description: DESCRIPTIONS[key] || humanize(key), ...(requires ? { requires } : {}) };
+    });
 }
 
 // Same names as the data center client, the old ones first so an environment that still has them keeps working.

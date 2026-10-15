@@ -13,7 +13,8 @@ const {
     getAvailableContacts,
     analyzeEmotion
 } = require('../controllers/checkinController');
-const { authenticate, requireStaffOrTeacher, authorize } = require('../middleware/auth');
+const { authenticate, requirePermission, requireAnyPermission, requireStudentDashboardScope } = require('../middleware/auth');
+const { PERMISSIONS } = require('../constants/permissions');
 const { validate, validateQuery } = require('../middleware/validation');
 const { emotionalCheckinSchema, paginationSchema, dateRangeSchema } = require('../utils/validationSchemas');
 const devTopologyTelemetryService = require('../services/devTopologyTelemetryService');
@@ -44,17 +45,20 @@ const aiUpload = multer({
     }
 });
 
-// Analyze emotion from image (before check-in) - no auth required for emotion analysis
-router.post('/emotion/analyze', upload.single('image'), analyzeEmotion);
-
 // All check-in routes require authentication
 router.use(authenticate);
 
-// Submit emotional check-in (staff/teacher only) with enhanced validation
-router.post('/submit', requireStaffOrTeacher, validate(emotionalCheckinSchema), submitCheckin);
+const canSubmit = requireAnyPermission(PERMISSIONS.CHECKIN_SELF_SUBMIT, PERMISSIONS.CHECKIN_STUDENT_SUBMIT);
+const canReadOwn = requirePermission(PERMISSIONS.CHECKIN_SELF_READ);
 
-// Submit AI emotion scan check-in (staff/teacher only) - separate route with different validation
-router.post('/ai-submit', requireStaffOrTeacher, aiUpload.single('image'), validate(emotionalCheckinSchema), (req, res, next) => {
+// Analyze emotion from image (before check-in)
+router.post('/emotion/analyze', canSubmit, upload.single('image'), analyzeEmotion);
+
+// Submit emotional check-in with enhanced validation
+router.post('/submit', canSubmit, validate(emotionalCheckinSchema), submitCheckin);
+
+// Submit AI emotion scan check-in - separate route with different validation
+router.post('/ai-submit', canSubmit, aiUpload.single('image'), validate(emotionalCheckinSchema), (req, res, next) => {
     // Log incoming request for debugging
     console.log('🤖 AI Submit Route - Incoming request body keys:', Object.keys(req.body || {}));
     console.log('🤖 AI Submit Route - Files:', req.files || req.file ? 'Present' : 'None');
@@ -63,24 +67,24 @@ router.post('/ai-submit', requireStaffOrTeacher, aiUpload.single('image'), valid
 }, devTopologyTelemetryService.instrumentedHandler('ai_checkin_submit', submitAICheckin));
 
 // Get today's check-in
-router.get('/today', getTodayCheckin);
+router.get('/today', canReadOwn, getTodayCheckin);
 
 // Get today's check-in status (for UI to show available options)
-router.get('/today/status', getTodayCheckinStatus);
+router.get('/today/status', canReadOwn, getTodayCheckinStatus);
 
 // Personal dashboard (today + overall stats) for any authenticated user
-router.get('/personal/dashboard', getPersonalDashboard);
+router.get('/personal/dashboard', canReadOwn, getPersonalDashboard);
 
 // Get check-in results with AI analysis
-router.get('/results/:id', getCheckinResults);
+router.get('/results/:id', canReadOwn, getCheckinResults);
 
 // Get check-in history with pagination and date filtering
-router.get('/history', validateQuery(paginationSchema), validateQuery(dateRangeSchema), getCheckinHistory);
+router.get('/history', canReadOwn, validateQuery(paginationSchema), validateQuery(dateRangeSchema), getCheckinHistory);
 
 // Student daily dashboard for teacher + principal + elevated roles
-router.get('/teacher/dashboard', authorize('teacher', 'se_teacher', 'head_unit', 'directorate', 'admin', 'superadmin'), getTeacherDailyCheckins);
+router.get('/teacher/dashboard', requirePermission(PERMISSIONS.STUDENT_CHECKINS_READ), requireStudentDashboardScope, getTeacherDailyCheckins);
 
 // Get available support contacts
-router.get('/contacts/available', getAvailableContacts);
+router.get('/contacts/available', requirePermission(PERMISSIONS.SUPPORT_CONTACTS_READ), getAvailableContacts);
 
 module.exports = router;

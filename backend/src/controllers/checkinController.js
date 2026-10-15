@@ -4,6 +4,8 @@ const UserStudent = require('../models/UserStudent');
 const EmotionalCheckin = require('../models/EmotionalCheckin');
 const StudentEmotionalCheckin = require('../models/StudentEmotionalCheckin');
 const { buildCheckinUserSnapshot } = require('../utils/checkinIdentity');
+const { SCOPE_MODE } = require('../constants/enums');
+const { staffInScope } = require('../utils/accessScope');
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const STUDENT_DAILY_LIMIT_PER_TYPE = 2;
@@ -1288,6 +1290,16 @@ const getCheckinResults = async (req, res) => {
     }
 };
 
+// Another person's history opens only when they fall inside the viewer's dashboard scope.
+const canViewHistoryOf = (viewer, target) => {
+    if (target.role !== 'student') return staffInScope(viewer.staffDashboardScope, target);
+    const scope = viewer.studentDashboardScope;
+    if (scope.mode === SCOPE_MODE.ALL) return true;
+    if (scope.mode === SCOPE_MODE.UNIT) return target.unit === scope.unit || target.department === scope.unit;
+    if (scope.mode === SCOPE_MODE.ASSIGNED) return studentMatchesTeacherScopes(target, buildTeacherClassScopes(viewer.classes));
+    return false;
+};
+
 // Get check-in history with pagination and optional user filtering for dashboard
 const getCheckinHistory = async (req, res) => {
     try {
@@ -1304,18 +1316,18 @@ const getCheckinHistory = async (req, res) => {
 
         if (requestedUserId) {
             // If requesting another user's data, enforce permissions
-            const isSelf = String(requestedUserId) === String(req.user.id);
-            const elevated = ['directorate', 'admin', 'superadmin'].includes(req.user.role);
-            const dashboardRole = ['directorate', 'admin', 'superadmin', 'head_unit', 'teacher', 'se_teacher'].includes(req.user.role);
-            if (!isSelf && !elevated && !dashboardRole) {
-                return sendError(res, 'Access denied for this user\'s history', 403);
-            }
             query.$or = [
                 { userId: requestedUserId },
                 { legacyResolvedUserId: requestedUserId }
             ];
-            const requestedUser = await findAnyUserById(requestedUserId, 'role');
-            queryRole = requestedUser?.role || req.user.role;
+            const requestedUser = await findAnyUserById(requestedUserId, 'role unit department currentGrade className');
+            if (!requestedUser) {
+                return sendError(res, 'User not found', 404);
+            }
+            if (String(requestedUserId) !== String(req.user.id) && !canViewHistoryOf(req.user, requestedUser)) {
+                return sendError(res, 'Access denied for this user\'s history', 403);
+            }
+            queryRole = requestedUser.role;
         } else {
             // Default to current user's history if no userId specified
             query.$or = [
@@ -1381,9 +1393,10 @@ const getTeacherDailyCheckins = async (req, res) => {
     try {
         const { sendSuccess, sendError } = require('../utils/response');
         const CheckinModel = StudentEmotionalCheckin;
-        const viewerRole = req.user?.role;
-        const isTeacherRole = viewerRole === 'teacher' || viewerRole === 'se_teacher';
-        const isPrincipalView = ['head_unit', 'directorate', 'admin', 'superadmin'].includes(viewerRole);
+        const viewerScope = req.user.studentDashboardScope;
+        const viewerRole = viewerScope.mode;
+        const isTeacherRole = viewerScope.mode === SCOPE_MODE.ASSIGNED;
+        const isPrincipalView = viewerScope.mode === SCOPE_MODE.UNIT || viewerScope.mode === SCOPE_MODE.ALL;
         const requestedGrade = normalizeSpaces(String(req.query.grade || ''));
         const requestedClassName = normalizeSpaces(String(req.query.className || ''));
         const requestedUnit = resolveUnitLabel(req.query.unit || '');
@@ -1430,10 +1443,9 @@ const getTeacherDailyCheckins = async (req, res) => {
                     .filter(Boolean)
             ));
         } else if (isPrincipalView) {
-            const viewerUnit = resolveUnitLabel(req.user?.unit || req.user?.department || '');
-            const effectiveUnit = viewerRole === 'head_unit'
-                ? viewerUnit
-                : (requestedUnit || viewerUnit);
+            const effectiveUnit = viewerScope.mode === SCOPE_MODE.UNIT
+                ? resolveUnitLabel(viewerScope.unit)
+                : requestedUnit;
 
             const studentFilter = {
                 role: 'student',
@@ -1465,7 +1477,7 @@ const getTeacherDailyCheckins = async (req, res) => {
             scopeMeta.unit = effectiveUnit || null;
             scopeMeta.gradeBand = requestedGrade || (effectiveUnit ? getUnitGradeBandLabel(effectiveUnit) : 'All Grades');
         } else {
-            return sendError(res, 'Role is not allowed to access student daily dashboard', 403);
+            return sendError(res, 'No students are open to your dashboard', 403);
         }
 
         scopedStudents.sort((a, b) => {
