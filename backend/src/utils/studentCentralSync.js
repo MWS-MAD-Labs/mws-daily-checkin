@@ -1,4 +1,4 @@
-const { lookupStudentByEmail, lookupStudentByPersonId } = require('../services/mwsDataCenterClient');
+const { lookupStudentByEmail } = require('../services/mwsDataCenterClient');
 const { buildStudentUserPayload } = require('./studentUserHelpers');
 
 // Returns the UserStudent fields to sync from mws-data-center, or null if
@@ -7,9 +7,8 @@ const { buildStudentUserPayload } = require('./studentUserHelpers');
 // mws-data-center's /students/lookup only ever returns ACTIVE students, so
 // there's no status other than "ACTIVE" to map here.
 async function syncStudentFromCentral(email, centralPersonId) {
-    const centralStudent = centralPersonId
-        ? await lookupStudentByPersonId(centralPersonId) || await lookupStudentByEmail(email)
-        : await lookupStudentByEmail(email);
+    // Central finds a student by id, nis or email, not by person id.
+    const centralStudent = await lookupStudentByEmail(email);
     if (!centralStudent) return null;
 
     return buildStudentUserPayload({

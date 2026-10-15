@@ -26,7 +26,7 @@ async function lookupEmployeeByEmail(email) {
 
 async function lookupEmployeeByPersonId(personId) {
   try {
-    const { data } = await client.get("/employees/lookup", { params: { id: personId } });
+    const { data } = await client.get("/employees/lookup", { params: { person_id: personId } });
     return data.data;
   } catch (error) {
     if (error.response?.status === 404 || error.response?.status === 400) return null;
@@ -58,16 +58,6 @@ async function lookupStudentByEmail(email) {
     return data.data;
   } catch (error) {
     if (error.response?.status === 404) return null;
-    throw error;
-  }
-}
-
-async function lookupStudentByPersonId(personId) {
-  try {
-    const { data } = await client.get("/students/lookup", { params: { id: personId } });
-    return data.data;
-  } catch (error) {
-    if (error.response?.status === 404 || error.response?.status === 400) return null;
     throw error;
   }
 }
@@ -205,7 +195,6 @@ module.exports = {
   listActiveEmployees,
   listStudentsByStatus,
   lookupStudentByEmail,
-  lookupStudentByPersonId,
   getStudentSupportContacts,
   listClassTeacherAssignments,
 };

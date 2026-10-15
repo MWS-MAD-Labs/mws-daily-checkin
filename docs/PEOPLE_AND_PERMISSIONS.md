@@ -8,7 +8,11 @@ One collection, `people`, one document per person, the way Central keeps them. A
 
 The sync asks Central one small question every minute (the key of `/application-entitlements/version`). It reads the full list only when the key moved. Unit, job, grade, class and who teaches what are not part of that key, so they are read in bulk every two minutes. Set `DAILY_AUTO_SYNC_SECONDS` to change the minute (minimum 15, `0` turns it off). Only one server instance syncs at a time.
 
-`Sync Now` in the quick menu runs the same sync once. Status is in the `centralsyncstates` collection.
+There is no button to run it: the sync is automatic. User Management shows when Daily last checked Central, when something last changed, and any problem in plain words (for people with `sync.read`). The same is at `GET /api/v1/sync/status` and in the `centralsyncstates` collection.
+
+### What Daily's API token needs in Central
+
+`application_entitlements:read` and `employees:read` for the access list and employees. `students:read` and `class_teacher_assignments:read` for students and for the classes teachers are assigned to. Without the last two, employees still sync in full, students and teacher classes are skipped, and the status line names the missing scope.
 
 ## What a person may do
 

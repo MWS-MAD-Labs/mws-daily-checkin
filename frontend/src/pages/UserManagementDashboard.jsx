@@ -16,6 +16,7 @@ import {
 const UserStatsOverview = lazy(() => import(/* webpackChunkName: "user-stats" */ "./user-management/components/UserStatsOverview"));
 const UserTable = lazy(() => import(/* webpackChunkName: "user-table" */ "./user-management/components/UserTable"));
 const UserFilters = lazy(() => import(/* webpackChunkName: "user-filters" */ "./user-management/components/UserFilters"));
+const SyncStatusLine = lazy(() => import(/* webpackChunkName: "sync-status" */ "./user-management/components/SyncStatusLine"));
 const UserDetailsModal = lazy(() => import(/* webpackChunkName: "user-details" */ "./user-management/components/UserDetailsModal"));
 
 // Loading fallback component
@@ -53,6 +54,7 @@ const UserManagementDashboard = memo(() => {
 
     // Check if user has admin access
     const hasAdminAccess = hasPermission(currentUser, PERMISSIONS.USERS_READ);
+    const canReadSyncStatus = hasPermission(currentUser, PERMISSIONS.SYNC_READ);
 
     // Load initial data
     useEffect(() => {
@@ -120,6 +122,11 @@ const UserManagementDashboard = memo(() => {
                         <p className="text-muted-foreground">
                             Users and roles are managed in Central
                         </p>
+                        {canReadSyncStatus && (
+                            <Suspense fallback={null}>
+                                <SyncStatusLine />
+                            </Suspense>
+                        )}
                     </motion.div>
 
                     {/* Error Display */}

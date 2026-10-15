@@ -23,6 +23,17 @@ const CLASS_ROLE_LABELS = {
     SUBJECT_TEACHER: 'Subject Teacher',
 };
 
+// What went wrong, in words the status line can show. A 403 from Central names the scope the token lacks.
+function describeFailure(error) {
+    if (error?.response?.status === 403) {
+        const body = error.response?.data || {};
+        const text = [body.message, typeof body.errors === 'string' ? body.errors : JSON.stringify(body.errors || '')].join(' ');
+        const scope = /scope '([^']+)'/.exec(text)?.[1];
+        return scope ? `Daily's API token is missing the scope ${scope}` : "Central refused a request from Daily's API token";
+    }
+    return error?.message || 'Unknown error';
+}
+
 // 0 turns it off. Anything unusable falls back to the default, and nothing runs faster than 15 seconds.
 function syncIntervalMs(raw) {
     if (raw === undefined || String(raw).trim() === '') return DEFAULT_SECONDS * 1000;
@@ -39,6 +50,7 @@ async function syncAccess(api = central) {
     const people = await Person.find({});
     const byPersonId = new Map(people.filter((p) => p.centralPersonId).map((p) => [p.centralPersonId, p]));
     const summary = { created: 0, updated: 0, revoked: 0, unchanged: 0, unmapped: 0, invalid: 0 };
+    const warnings = new Set();
     const seen = new Set();
 
     for (const row of rows) {
@@ -73,7 +85,7 @@ async function syncAccess(api = central) {
         }
 
         // Somebody new: ask Central once what kind of person they are and what it keeps about them.
-        const created = await buildNewPerson(api, row, projection);
+        const created = await buildNewPerson(api, row, projection, warnings);
         if (!created) {
             summary.unmapped += 1;
             continue;
@@ -97,21 +109,30 @@ async function syncAccess(api = central) {
         summary.revoked += 1;
     }
 
-    return { summary, key };
+    return { summary, key, warnings: [...warnings] };
 }
 
-async function buildNewPerson(api, row, projection) {
+async function buildNewPerson(api, row, projection, warnings) {
     const email = normalizeEmail(row.person?.email);
     if (!email) return null;
     let fields = null;
     let personType = null;
 
-    const employee = await api.lookupEmployeeByPersonId(row.person_id);
+    // One lookup that Central refuses must not stop the rest, so a failure leaves this person out and says why.
+    const attempt = async (lookup) => {
+        try {
+            return await lookup();
+        } catch (error) {
+            warnings.add(describeFailure(error));
+            return null;
+        }
+    };
+    const employee = await attempt(() => api.lookupEmployeeByPersonId(row.person_id));
     if (employee) {
         personType = PERSON_TYPE.EMPLOYEE;
         fields = mapCentralEmployee(employee);
     } else {
-        const student = await api.lookupStudentByPersonId(row.person_id);
+        const student = await attempt(() => api.lookupStudentByEmail(email));
         if (student) {
             personType = PERSON_TYPE.STUDENT;
             fields = buildStudentUserPayload({
@@ -172,33 +193,42 @@ function classesByEmail(assignments) {
 const differs = (person, fields) => Object.entries(fields).some(([key, value]) => value !== undefined && String(person[key] ?? '') !== String(value ?? ''));
 
 // What Central keeps about each person outside the key: unit, job, grade, class, who teaches what, and whether
-// they are still active there. A list that cannot be read in full is skipped, never used to deactivate anyone.
+// they are still active there. Each list is read on its own. A list that cannot be read in full is skipped and
+// never used to deactivate anyone, and the others carry on.
 async function syncProfiles(api = central) {
-    const summary = { updated: 0, deactivated: 0, reactivated: 0, skipped: false };
-    let employees;
-    let assignments;
-    let studentsByEmail;
-    try {
-        [employees, assignments] = await Promise.all([api.listActiveEmployees(), api.listClassTeacherAssignments()]);
-        studentsByEmail = new Map();
+    const summary = { updated: 0, deactivated: 0, reactivated: 0, skipped: false, warnings: [] };
+    const warnings = new Set();
+    const read = async (label, load) => {
+        try {
+            return await load();
+        } catch (error) {
+            warnings.add(`${label} skipped: ${describeFailure(error)}`);
+            return null;
+        }
+    };
+
+    const employees = await read('Employees', () => api.listActiveEmployees());
+    const assignments = await read('Class assignments', () => api.listClassTeacherAssignments());
+    const students = await read('Students', async () => {
+        const byEmail = new Map();
         for (const status of ENROLLED_STUDENT_STATUSES) {
             for (const student of await api.listStudentsByStatus(status)) {
                 const email = normalizeEmail(student.email);
-                if (email) studentsByEmail.set(email, student);
+                if (email) byEmail.set(email, student);
             }
         }
-    } catch (error) {
-        winston.warn(`centralSync: could not read the profile lists, skipping this run: ${error.message}`);
-        return { ...summary, skipped: true };
-    }
+        return byEmail;
+    });
+    summary.warnings = [...warnings];
+    if (!employees && !students && !assignments) return { ...summary, skipped: true };
 
-    const employeesByPersonId = new Map(employees.map((e) => [e.person_id, e]));
-    const teachingClasses = classesByEmail(assignments);
+    const employeesByPersonId = employees ? new Map(employees.map((e) => [e.person_id, e])) : null;
+    const teachingClasses = assignments ? classesByEmail(assignments) : null;
     const people = await Person.find({ personType: { $exists: true } });
 
     for (const person of people) {
-        let next;
-        if (person.personType === PERSON_TYPE.EMPLOYEE) {
+        let next = null;
+        if (person.personType === PERSON_TYPE.EMPLOYEE && employeesByPersonId) {
             const employee = employeesByPersonId.get(person.centralPersonId);
             if (!employee) {
                 next = { isActive: false };
@@ -206,8 +236,8 @@ async function syncProfiles(api = central) {
                 const { name, gender, employeeId, jobPosition, jobLevel, employmentStatus, department, unit, jobKind } = mapCentralEmployee(employee);
                 next = { name, gender, employeeId, jobPosition, jobLevel, employmentStatus, department, unit, jobKind, isActive: true };
             }
-        } else {
-            const student = studentsByEmail.get(normalizeEmail(person.email));
+        } else if (person.personType === PERSON_TYPE.STUDENT && students) {
+            const student = students.get(normalizeEmail(person.email));
             if (!student) {
                 next = { isActive: false };
             } else {
@@ -224,16 +254,16 @@ async function syncProfiles(api = central) {
             }
         }
 
-        const classes = person.personType === PERSON_TYPE.EMPLOYEE ? teachingClasses.get(normalizeEmail(person.email)) || [] : null;
+        const classes = person.personType === PERSON_TYPE.EMPLOYEE && teachingClasses ? teachingClasses.get(normalizeEmail(person.email)) || [] : null;
         const classesChanged = classes && !sameClasses(person.classes || [], classes);
-        if (!differs(person, next) && !classesChanged) continue;
+        if (!(next && differs(person, next)) && !classesChanged) continue;
 
         const wasActive = person.isActive;
-        Object.assign(person, Object.fromEntries(Object.entries(next).filter(([, value]) => value !== undefined)));
+        if (next) Object.assign(person, Object.fromEntries(Object.entries(next).filter(([, value]) => value !== undefined)));
         if (classesChanged) person.classes = classes;
         await person.save();
-        if (next.isActive === false && wasActive) summary.deactivated += 1;
-        else if (next.isActive && !wasActive) summary.reactivated += 1;
+        if (next?.isActive === false && wasActive) summary.deactivated += 1;
+        else if (next?.isActive && !wasActive) summary.reactivated += 1;
         else summary.updated += 1;
     }
     return summary;
@@ -259,11 +289,13 @@ async function runSync({ force = false, api = central, now = new Date() } = {}) 
     const state = claimed || (await CentralSyncState.findById(APP_ID));
 
     const result = { status: 'unchanged' };
+    const warnings = new Set();
     const update = { checkedAt: now, lastError: null };
     try {
         const centralKey = await api.getApplicationEntitlementKey(APP_ID);
         if (force || !centralKey || centralKey !== state.key) {
-            const { summary, key } = await syncAccess(api);
+            const { summary, key, warnings: accessWarnings } = await syncAccess(api);
+            accessWarnings.forEach((warning) => warnings.add(warning));
             Object.assign(update, { key, syncedAt: now, lastSummary: summary });
             result.status = 'synced';
             result.summary = summary;
@@ -271,18 +303,23 @@ async function runSync({ force = false, api = central, now = new Date() } = {}) 
         const profilesDue = force || !state.profilesSyncedAt || now - state.profilesSyncedAt >= PROFILE_EVERY_MS;
         if (profilesDue) {
             const profiles = await syncProfiles(api);
+            (profiles.warnings || []).forEach((warning) => warnings.add(warning));
             if (!profiles.skipped) update.profilesSyncedAt = now;
             result.profiles = profiles;
             if (result.status === 'unchanged' && (profiles.updated || profiles.deactivated || profiles.reactivated)) result.status = 'synced';
         }
     } catch (error) {
-        update.lastError = error.message;
+        const message = describeFailure(error);
+        update.lastError = message;
         result.status = 'error';
-        result.message = error.message;
-        winston.warn(`centralSync: ${error.message}`);
+        result.message = message;
+        winston.warn(`centralSync: ${message}`);
     } finally {
+        update.warnings = [...warnings];
+        if (update.warnings.length) winston.warn(`centralSync: ${update.warnings.join('; ')}`);
         await CentralSyncState.updateOne({ _id: APP_ID }, { $set: { ...update, lockedUntil: null } });
     }
+    result.warnings = [...warnings];
     return result;
 }
 
@@ -304,4 +341,4 @@ function stop() {
     firstRunHandle = null;
 }
 
-module.exports = { start, stop, runSync, syncAccess, syncProfiles, syncIntervalMs };
+module.exports = { start, stop, runSync, syncAccess, syncProfiles, syncIntervalMs, describeFailure };

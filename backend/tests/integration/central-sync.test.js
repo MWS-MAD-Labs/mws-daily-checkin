@@ -21,7 +21,7 @@ const fakeApi = (over = {}) => ({
     getApplicationEntitlementKey: jest.fn().mockResolvedValue('key-1'),
     listApplicationEntitlements: jest.fn().mockResolvedValue({ rows: [row()], key: 'key-1' }),
     lookupEmployeeByPersonId: jest.fn().mockResolvedValue(employee()),
-    lookupStudentByPersonId: jest.fn().mockResolvedValue(null),
+    lookupStudentByEmail: jest.fn().mockResolvedValue(null),
     listActiveEmployees: jest.fn().mockResolvedValue([employee()]),
     listStudentsByStatus: jest.fn().mockResolvedValue([]),
     listClassTeacherAssignments: jest.fn().mockResolvedValue([]),
@@ -127,8 +127,60 @@ describe('sync with Central', () => {
     it('never deactivates anyone when a list could not be read in full', async () => {
         await syncAccess(fakeApi());
         const result = await syncProfiles(fakeApi({ listActiveEmployees: jest.fn().mockRejectedValue(new Error('page 2 failed')) }));
-        expect(result.skipped).toBe(true);
+        expect(result.warnings).toEqual(['Employees skipped: page 2 failed']);
         expect((await Person.findOne({ centralPersonId: 'p-1' })).isActive).toBe(true);
+    });
+
+    it('finds an employee by person id and a student by email, and keeps going when Central refuses one lookup', async () => {
+        const refused = Object.assign(new Error('Request failed with status code 403'), {
+            response: { status: 403, data: { message: "Forbidden: missing required scope 'students:read'" } },
+        });
+        const rows = [row(), row({ id: 'ent-2', person_id: 'p-2', person: { full_name: 'Kid', email: 'kid@sync-test.id' }, role: 'STUDENT' })];
+        const api = fakeApi({
+            listApplicationEntitlements: jest.fn().mockResolvedValue({ rows, key: 'k' }),
+            lookupEmployeeByPersonId: jest.fn((id) => Promise.resolve(id === 'p-1' ? employee() : null)),
+            lookupStudentByEmail: jest.fn().mockRejectedValue(refused),
+        });
+        const { summary, warnings } = await syncAccess(api);
+        expect(api.lookupEmployeeByPersonId).toHaveBeenCalledWith('p-1');
+        expect(api.lookupStudentByEmail).toHaveBeenCalledWith('kid@sync-test.id');
+        expect(summary).toMatchObject({ created: 1, unmapped: 1 });
+        expect(warnings).toEqual(["Daily's API token is missing the scope students:read"]);
+    });
+
+    it('skips only the list Central refuses, and says which', async () => {
+        await syncAccess(fakeApi());
+        const refused = Object.assign(new Error('403'), { response: { status: 403, data: { message: "Forbidden: missing required scope 'class_teacher_assignments:read'" } } });
+        const api = fakeApi({
+            listActiveEmployees: jest.fn().mockResolvedValue([employee({ unit: 'Junior High' })]),
+            listClassTeacherAssignments: jest.fn().mockRejectedValue(refused),
+        });
+        const result = await syncProfiles(api);
+        expect(result.skipped).toBe(false);
+        expect(result.updated).toBe(1);
+        expect(result.warnings).toEqual(["Class assignments skipped: Daily's API token is missing the scope class_teacher_assignments:read"]);
+        expect((await Person.findOne({ centralPersonId: 'p-1' })).unit).toBe('Junior High');
+    });
+
+    it('stores the warnings with the sync status', async () => {
+        const refused = Object.assign(new Error('403'), { response: { status: 403, data: { message: "Forbidden: missing required scope 'students:read'" } } });
+        const api = fakeApi({ listStudentsByStatus: jest.fn().mockRejectedValue(refused) });
+        const result = await runSync({ api });
+        expect(result.warnings).toEqual(["Students skipped: Daily's API token is missing the scope students:read"]);
+        expect((await CentralSyncState.findById('daily-checkin')).warnings).toEqual(result.warnings);
+    });
+
+    it('lets two people share one group entitlement id', async () => {
+        const rows = [
+            row({ id: 'group:staff', person_id: 'p-1' }),
+            row({ id: 'group:staff', person_id: 'p-3', person: { full_name: 'Teacher Two', email: 'two@sync-test.id' } }),
+        ];
+        const api = fakeApi({
+            listApplicationEntitlements: jest.fn().mockResolvedValue({ rows, key: 'k' }),
+            lookupEmployeeByPersonId: jest.fn((id) => Promise.resolve(employee({ person_id: id, email: id === 'p-1' ? 'one@sync-test.id' : 'two@sync-test.id' }))),
+        });
+        const { summary } = await syncAccess(api);
+        expect(summary.created).toBe(2);
     });
 
     it('reads the interval the way Exima does: 60 seconds, never under 15, 0 is off', () => {

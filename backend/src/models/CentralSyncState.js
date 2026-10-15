@@ -9,6 +9,7 @@ const centralSyncStateSchema = new mongoose.Schema({
     checkedAt: Date,
     profilesSyncedAt: Date,
     lastError: { type: String, default: null },
+    warnings: [String],
     lastSummary: mongoose.Schema.Types.Mixed,
     lockedUntil: Date,
 }, { collection: 'centralsyncstates' });

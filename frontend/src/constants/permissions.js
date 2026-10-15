@@ -11,5 +11,6 @@ export const PERMISSIONS = Object.freeze({
     DASHBOARD_READ: 'dashboard.read',
     DASHBOARD_EXPORT: 'dashboard.export',
     USERS_READ: 'users.read',
+    SYNC_READ: 'sync.read',
     HUB_SUPPORT_ACCESS: 'hub.support.access',
 });

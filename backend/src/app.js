@@ -137,6 +137,8 @@ const initializeApp = async () => {
 
         // Connect to MongoDB
         await connectDB();
+        // Keeps the indexes of the people collection exactly as the model says (drops one the model no longer has).
+        await require('./models/Person').syncIndexes();
 
         // Keeps the people of this app in line with Central (who may use it, their unit, grade and classes)
         // by itself, once a minute by default.

@@ -18,7 +18,8 @@ const personSchema = new mongoose.Schema({
     lastLogin: { type: Date },
 
     // What Central allows in this app.
-    centralEntitlementId: { type: String, unique: true, sparse: true, trim: true },
+    // A group's entitlement ("group:<id>") is shared by everybody in the group, so this cannot be unique.
+    centralEntitlementId: { type: String, trim: true, index: true },
     centralEntitlementApplicationId: { type: String, trim: true },
     centralEntitlementOrganizationId: { type: String, trim: true, index: true },
     centralEntitlementRole: { type: String, trim: true },

@@ -17,7 +17,6 @@ const PERMISSIONS = Object.freeze({
     SUPPORT_REQUESTS_MANAGE: 'support_requests.manage',
     USERS_READ: 'users.read',
     SYNC_READ: 'sync.read',
-    SYNC_RUN: 'sync.run',
     DEV_TOPOLOGY_READ: 'dev_topology.read',
     HUB_SUPPORT_ACCESS: 'hub.support.access',
 });
@@ -64,8 +63,7 @@ const PERMISSION_DETAILS = Object.freeze({
         requires: [PERMISSIONS.DASHBOARD_READ],
     },
     [PERMISSIONS.USERS_READ]: { description: 'Open User Management and see the people synced from Central' },
-    [PERMISSIONS.SYNC_READ]: { description: 'See the status of the sync with Central' },
-    [PERMISSIONS.SYNC_RUN]: { description: 'Run the sync with Central now', requires: [PERMISSIONS.SYNC_READ] },
+    [PERMISSIONS.SYNC_READ]: { description: 'See when Daily last synced with Central and whether it hit a problem' },
     [PERMISSIONS.DEV_TOPOLOGY_READ]: { description: 'See the development topology' },
     [PERMISSIONS.HUB_SUPPORT_ACCESS]: { description: 'Show the Support Hub link in the quick menu' },
 });
