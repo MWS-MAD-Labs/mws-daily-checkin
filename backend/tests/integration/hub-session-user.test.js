@@ -64,11 +64,8 @@ describe('resolveSessionUser', () => {
         expect(await resolveSessionUser(claims)).toBeNull();
     });
 
-    test('gives nobody access for another organization or an unknown permission', async () => {
+    test('gives nobody access for another organization', async () => {
         lookupApplicationEntitlement.mockResolvedValueOnce(entitlement({ organization_id: 'other-org' }));
-        expect(await resolveSessionUser(claims)).toBeNull();
-        clearEntitlementCache();
-        lookupApplicationEntitlement.mockResolvedValueOnce(entitlement({ permissions: ['not.a.real.permission'] }));
         expect(await resolveSessionUser(claims)).toBeNull();
     });
 

@@ -28,14 +28,13 @@ function validateEntitlement(input, expectedOrganizationIdValue = expectedOrgani
         throw new Error('Entitlement organization does not match this deployment');
     }
 
-    const unknown = entitlement.permissions.filter((permission) => !PERMISSION_SET.has(permission));
-    if (unknown.length > 0) {
-        throw new Error(`Entitlement contains unknown permissions: ${unknown.join(', ')}`);
-    }
+    // A permission this version of the code does not know grants nothing. It is left out instead of locking the
+    // whole role out, which is what a role still holding a removed permission would otherwise cause.
+    const known = entitlement.permissions.filter((permission) => PERMISSION_SET.has(permission));
 
     return {
         ...entitlement,
-        permissions: [...new Set(entitlement.permissions)].sort(),
+        permissions: [...new Set(known)].sort(),
     };
 }
 

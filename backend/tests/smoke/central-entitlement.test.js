@@ -19,10 +19,14 @@ describe('Central entitlement authorization', () => {
     test.each([
         [{ ...valid, application_id: 'other' }],
         [{ ...valid, organization_id: 'other' }],
-        [{ ...valid, permissions: ['unknown.permission'] }],
         [{ ...valid, extra: true }],
     ])('rejects invalid entitlement %#', (value) => {
         expect(() => validateEntitlement(value, 'org-1')).toThrow();
+    });
+
+    test('leaves out a permission the code does not know instead of rejecting the role', () => {
+        const result = validateEntitlement({ ...valid, permissions: ['checkin.self.read', 'attendance.self.read'] }, 'org-1');
+        expect(result.permissions).toEqual(['checkin.self.read']);
     });
 
     test('updates projection without overwriting HR role and increments existing sessions', () => {
