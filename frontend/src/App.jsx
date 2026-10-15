@@ -6,7 +6,6 @@ import RouteConfig from '@/components/app/RouteConfig';
 import { useCrossTabAuthSync } from '@/hooks/useCrossTabAuthSync';
 import { useSessionRecheck } from '@/hooks/useSessionRecheck';
 import { useHubSessionKeeper } from '@/hooks/useHubSessionKeeper';
-import { resolveRouteVisualPolicy } from '@/utils/routeVisualPolicy';
 
 const BackgroundDecor = lazy(() => import('@/components/app/BackgroundDecor'));
 const WorkforceHumanisticLayer = lazy(() => import('@/components/app/WorkforceHumanisticLayer'));
@@ -14,6 +13,8 @@ const UtilityDock = lazy(() => import('@/components/app/UtilityDock'));
 const ThemeSpellOverlay = lazy(() => import('@/components/app/ThemeSpellOverlay'));
 const GlobalLoadingOverlay = lazy(() => import('@/components/app/GlobalLoadingOverlay'));
 const QuickLogoutButton = lazy(() => import('@/components/app/QuickLogoutButton'));
+
+const routeMatches = (pathname, prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`);
 
 const App = memo(() => {
     const location = useLocation();
@@ -96,13 +97,8 @@ const App = memo(() => {
 
     // Memoize key for AnimatePresence to prevent unnecessary re-renders
     const animatePresenceKey = useMemo(() => location.pathname, [location.pathname]);
-    const visualPolicy = useMemo(
-        () => resolveRouteVisualPolicy(location.pathname),
-        [location.pathname],
-    );
-    const shouldShowAppUtilities = useMemo(
-        () => !location.pathname.startsWith('/system/mockup-')
-            && !location.pathname.startsWith('/journey/mockup-'),
+    const shouldShowWorkforceLayer = useMemo(
+        () => !routeMatches(location.pathname, '/emotional-checkin/staff'),
         [location.pathname],
     );
 
@@ -111,13 +107,13 @@ const App = memo(() => {
             <AppHelmet />
 
             <div className="relative min-h-screen bg-background text-foreground">
-                {showEnhancements && visualPolicy.backgroundDecor && (
+                {showEnhancements && (
                     <Suspense fallback={null}>
                         <BackgroundDecor />
                     </Suspense>
                 )}
 
-                {showEnhancements && visualPolicy.workforceLayer && (
+                {showEnhancements && shouldShowWorkforceLayer && (
                     <Suspense fallback={null}>
                         <WorkforceHumanisticLayer />
                     </Suspense>
@@ -132,8 +128,8 @@ const App = memo(() => {
                 {showEnhancements && (
                     <Suspense fallback={null}>
                         <ThemeSpellOverlay />
-                        {shouldShowAppUtilities && <UtilityDock />}
-                        {shouldShowAppUtilities && <QuickLogoutButton />}
+                        <UtilityDock />
+                        <QuickLogoutButton />
                         <GlobalLoadingOverlay />
                     </Suspense>
                 )}

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import { hasEmotionalDashboardAccess, hasAnyPermission } from '@/utils/accessControl';
+import { hasEmotionalDashboardAccess } from '@/utils/accessControl';
 import { sendToHub } from '@/utils/hubSession';
 import PageLoader from '@/components/PageLoader';
 
@@ -11,7 +11,6 @@ const ProtectedRoute = ({
     children,
     allowedRoles = [],
     allowedDepartments = [],
-    allowedPermissions = [],
     requireDirectorateAcademic = false,
     accessMatch = 'all',
 }) => {
@@ -43,10 +42,6 @@ const ProtectedRoute = ({
         if (!hasEmotionalDashboardAccess(user)) {
             return <Navigate to={fallbackPath} replace />;
         }
-    }
-
-    if (allowedPermissions.length > 0 && !hasAnyPermission(user, allowedPermissions)) {
-        return <Navigate to={fallbackPath} replace />;
     }
 
     const hasRoleRule = allowedRoles.length > 0;
