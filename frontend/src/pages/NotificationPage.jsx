@@ -1,3 +1,5 @@
+import { isStudent } from "@/utils/accessControl";
+import { PERSON_TYPE } from "@/constants/enums";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 import { Helmet } from "react-helmet";
@@ -348,7 +350,7 @@ export default function NotificationPage() {
     const navigate = useNavigate();
     const { toast } = useToast();
     const authUser = useSelector((state) => state.auth?.user);
-    const userRole = toLowerText(authUser?.role || "");
+    const userRole = isStudent(authUser) ? PERSON_TYPE.STUDENT : PERSON_TYPE.EMPLOYEE;
     const currentUserId = useMemo(
         () => String(authUser?._id || authUser?.id || authUser?.userId || "").trim(),
         [authUser]

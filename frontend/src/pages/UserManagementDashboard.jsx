@@ -1,3 +1,5 @@
+import { hasPermission } from "@/utils/accessControl";
+import { PERMISSIONS } from "@/constants/permissions";
 import { useState, useEffect, memo, useCallback, Suspense, lazy } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { motion, AnimatePresence } from "framer-motion";
@@ -50,11 +52,7 @@ const UserManagementDashboard = memo(() => {
     const [activeTab, setActiveTab] = useState('overview');
 
     // Check if user has admin access
-    const hasAdminAccess = currentUser && (
-        currentUser.role === 'directorate' ||
-        currentUser.role === 'superadmin' ||
-        currentUser.role === 'admin'
-    );
+    const hasAdminAccess = hasPermission(currentUser, PERMISSIONS.USERS_READ);
 
     // Load initial data
     useEffect(() => {

@@ -11,7 +11,9 @@ import { useSelector, useDispatch } from "react-redux";
 import { useNavigate, useLocation } from "react-router-dom";
 import { leaveToHub } from "@/store/slices/authSlice";
 import { applyThemePreference, emitThemeSpell, persistTheme } from "@/lib/theme";
-import { goToHubSupport, hasSupportHubAccess } from "@/utils/hubConfig";
+import { goToHubSupport } from "@/utils/hubConfig";
+import { hasPermission } from "@/utils/accessControl";
+import { PERMISSIONS } from "@/constants/permissions";
 import { useToast } from "@/components/ui/use-toast";
 import { getSyncStatus, triggerSync } from "@/services/syncService";
 import gsap from "gsap";
@@ -350,7 +352,7 @@ const QuickMenu = memo(() => {
                             );
                         })}
 
-                        {hasSupportHubAccess(user?.role) && (
+                        {hasPermission(user, PERMISSIONS.HUB_SUPPORT_ACCESS) && (
                             <button
                                 ref={(el) => (itemsRef.current[idx++] = el)}
                                 type="button"

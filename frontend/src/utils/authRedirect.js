@@ -1,3 +1,5 @@
+import { PERSON_TYPE } from "@/constants/enums";
+
 const PENDING_AUTH_REDIRECT_KEY = "pending_auth_redirect";
 
 // React Router's basename ('/daily-checkin', main.jsx) already strips the
@@ -52,9 +54,9 @@ export const consumePendingRedirect = () => {
 
 export const getDefaultPostLoginPath = (userOrRole) => {
     const user = userOrRole && typeof userOrRole === "object" ? userOrRole : null;
-    const normalizedRole = String(user?.role || userOrRole || "").trim().toLowerCase();
+    const isStudent = user ? user.personType === PERSON_TYPE.STUDENT : userOrRole === PERSON_TYPE.STUDENT;
 
-    if (normalizedRole === "student") {
+    if (isStudent) {
         return "/student/support-hub";
     }
 

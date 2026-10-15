@@ -1,3 +1,5 @@
+import { isStudent } from "@/utils/accessControl";
+import { PERSON_TYPE } from "@/constants/enums";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useSelector } from "react-redux";
@@ -14,18 +16,6 @@ const CLD_BASE = "https://res.cloudinary.com/deldcwiji/image/upload";
 const cardPhoto = (id, w = 252, h = 324) => `${CLD_BASE}/c_fill,w_${w},h_${h},g_auto,f_auto,q_auto/${id}`;
 const cutoutPhoto = (id, w = 380) => `${CLD_BASE}/c_scale,w_${w},f_auto,q_auto/${id}`;
 
-const WORKFORCE_ROLES = new Set([
-    "teacher",
-    "se_teacher",
-    "staff",
-    "support_staff",
-    "nurse",
-    "head_unit",
-    "principal",
-    "directorate",
-    "admin",
-    "superadmin",
-]);
 
 const routeMatches = (pathname, prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`);
 
@@ -429,7 +419,7 @@ const WorkforceHumanisticLayer = memo(() => {
     const user = useSelector((state) => state.auth?.user);
     const lowMotion = usePreferLowMotion();
     const pathname = location.pathname || "";
-    const normalizedRole = String(user?.role || "").trim().toLowerCase();
+    const normalizedRole = isStudent(user) ? PERSON_TYPE.STUDENT : PERSON_TYPE.EMPLOYEE;
     const [viewportWidth, setViewportWidth] = useState(() => (
         typeof window === "undefined" ? 1280 : window.innerWidth
     ));
@@ -451,7 +441,7 @@ const WorkforceHumanisticLayer = memo(() => {
     }, []);
 
     const shouldRender = useMemo(() => {
-        if (!WORKFORCE_ROLES.has(normalizedRole)) return false;
+        if (normalizedRole !== PERSON_TYPE.EMPLOYEE) return false;
         if (routeMatches(pathname, "/student")) return false;
         if (routeMatches(pathname, "/mtss/student-portal")) return false;
         if (routeMatches(pathname, "/emotional-checkin/staff")) return false;

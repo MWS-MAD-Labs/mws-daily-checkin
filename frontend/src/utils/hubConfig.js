@@ -25,18 +25,6 @@ const HUB_SUPPORT_PATH = '/support-hub';
 // clicks from one entry point.
 const HUB_SUPPORT_WINDOW_NAME = 'mws-hub-support';
 
-// Roles that see the "Support Hub" shortcut (RoleSelectionPage.jsx's old
-// standalone button, now folded into QuickLogoutButton.jsx's menu) - students
-// don't get one, they never go through Hub's app-launcher UI.
-export const SUPPORT_HUB_ROLES = [
-    'staff', 'support_staff', 'nurse', 'counselor', 'teacher', 'se_teacher',
-    'head_unit', 'principal', 'directorate', 'admin', 'superadmin',
-];
-
-export function hasSupportHubAccess(role) {
-    return Boolean(role) && SUPPORT_HUB_ROLES.includes(role);
-}
-
 // Opened synchronously, still inside the click's own event handler and
 // before any await - a window.open() called after an await loses the
 // "trusted user gesture" most browsers require and gets popup-blocked.

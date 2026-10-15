@@ -39,12 +39,9 @@ import ThemeToggle from "@/components/ThemeToggle";
 import { getCheckinHistory, getPersonalDashboard } from "../store/slices/checkinSlice";
 import { leaveToHub } from "../store/slices/authSlice";
 import { useToast } from "@/components/ui/use-toast";
-import {
-    hasEmotionalDashboardAccess,
-    getEmotionalDashboardRole,
-    hasDelegatedDashboardAccess,
-    getDelegatedDashboardDetails
-} from "@/utils/accessControl";
+import { getDashboardScopeMode, hasDashboard, hasPermission, isStudent as isStudentUser } from "@/utils/accessControl";
+import { DASHBOARD, SCOPE_MODE } from "@/constants/enums";
+import { PERMISSIONS } from "@/constants/permissions";
 import useThrottledCallback from "@/hooks/useThrottledCallback";
 
 /* ---------------------- Helpers ---------------------- */
@@ -822,16 +819,13 @@ const ProfilePage = memo(function ProfilePage() {
     const dispatch = useDispatch();
     const { toast } = useToast();
     const { user: currentUser } = useSelector((state) => state.auth);
-    const isAdminPrincipal = useMemo(
-        () => currentUser && ['admin', 'superadmin', 'head_unit', 'directorate'].includes(currentUser.role),
-        [currentUser],
-    );
+    const hasMtss = Boolean(currentUser?.mtssAccess?.hasAccess);
 
     // Redux state
-    const canAccessDashboard = currentUser && hasEmotionalDashboardAccess(currentUser);
-    const dashboardRole = useMemo(() => getEmotionalDashboardRole(currentUser), [currentUser]);
-    const delegatedDashboardAccess = hasDelegatedDashboardAccess(currentUser);
-    const delegatedDashboardDetails = getDelegatedDashboardDetails(currentUser);
+    const canAccessDashboard = hasDashboard(currentUser, DASHBOARD.STAFF);
+    const isUnitDashboard = getDashboardScopeMode(currentUser, DASHBOARD.STAFF) === SCOPE_MODE.UNIT;
+    const canManageUsers = hasPermission(currentUser, PERMISSIONS.USERS_READ);
+    const canSeeOwnHistory = hasPermission(currentUser, PERMISSIONS.CHECKIN_SELF_READ);
     const {
         todayCheckin,
         checkinHistory,
@@ -937,7 +931,7 @@ const ProfilePage = memo(function ProfilePage() {
         const updated = { ...snapshot, count: snapshot.count + 1 };
         persistCheckinUsageSnapshot(updated);
         setCheckinUsage({ ...updated, ready: true });
-        const isStudent = currentUser?.role === 'student';
+        const isStudent = isStudentUser(currentUser);
         navigate(isStudent ? "/student/support-hub" : "/home");
     }, [navigate, toast, currentUser]);
 
@@ -1003,7 +997,7 @@ const ProfilePage = memo(function ProfilePage() {
     }), []);
 
     // Menu configuration
-    const isStudent = currentUser?.role === 'student';
+    const isStudent = isStudentUser(currentUser);
     const menuItems = useMemo(() => {
         const emotionalBadge = checkinUsage.ready
             ? checkinLimitReached
@@ -1027,78 +1021,44 @@ const ProfilePage = memo(function ProfilePage() {
             { key: "notif", icon: Bell, title: "Notification Settings", to: "/notifications/settings" },
         ];
 
-        const shouldShowPersonalMenu = currentUser && !['directorate', 'admin', 'superadmin'].includes(currentUser.role);
-        const isAdminMenu = currentUser && ['directorate', 'admin', 'superadmin', 'head_unit'].includes(currentUser.role);
+        const shouldShowPersonalMenu = canSeeOwnHistory;
         const dashboardMenuItem = {
             key: "dashboard",
             icon: BarChart3,
-            title: dashboardRole === 'head_unit' ? "Unit Dashboard" : "Emotional Dashboard",
-            to: "/emotional-checkin/dashboard",
-            badge: delegatedDashboardAccess ? "Delegated" : undefined
+            title: isUnitDashboard ? "Unit Dashboard" : "Emotional Dashboard",
+            to: "/emotional-checkin/dashboard"
         };
 
-        if (isAdminMenu) {
-            baseItems.splice(1, 0,
-                dashboardMenuItem,
-                { key: "user-mgmt", icon: UserCog, title: "User Management", to: "/user-management" }
+        const extraItems = [];
+        if (canAccessDashboard) extraItems.push(dashboardMenuItem);
+        if (canManageUsers) extraItems.push({ key: "user-mgmt", icon: UserCog, title: "User Directory", to: "/user-management" });
+        if (shouldShowPersonalMenu) {
+            extraItems.push(
+                { key: "stats", icon: TrendingUp, title: "Personal Stats", to: "/profile/personal-stats" },
+                { key: "history", icon: Calendar, title: "Emotional History", to: "/profile/emotional-history" },
+                { key: "insights", icon: Activity, title: "Emotional Insights", to: "/profile/emotional-patterns" }
             );
-        } else {
-            if (canAccessDashboard) {
-                baseItems.splice(1, 0, dashboardMenuItem);
-            }
-
-            if (shouldShowPersonalMenu) {
-                const insertIndex = canAccessDashboard ? 2 : 1;
-                baseItems.splice(insertIndex, 0,
-                    { key: "stats", icon: TrendingUp, title: "Personal Stats", to: "/profile/personal-stats" },
-                    { key: "history", icon: Calendar, title: "Emotional History", to: "/profile/emotional-history" },
-                    { key: "insights", icon: Activity, title: "Emotional Insights", to: "/profile/emotional-patterns" }
-                );
-            }
         }
+        baseItems.splice(1, 0, ...extraItems);
 
         return baseItems;
-    }, [currentUser, isStudent, handleEmotionalCheckin, checkinDescription, checkinLimitReached, checkinUsage.ready, remainingCheckins, canAccessDashboard, dashboardRole, delegatedDashboardAccess]);
+    }, [currentUser, isStudent, handleEmotionalCheckin, checkinDescription, checkinLimitReached, checkinUsage.ready, remainingCheckins, canAccessDashboard, isUnitDashboard, canManageUsers, canSeeOwnHistory]);
 
     // Quick actions
     const quickActions = useMemo(() => {
-        const isAdminRole = currentUser && ['directorate', 'admin', 'superadmin'].includes(currentUser.role);
-        const isHeadUnitRole = currentUser && currentUser.role === 'head_unit';
-        const dashboardLabel = dashboardRole === 'head_unit' ? "Unit Dashboard" : "Emotional Dashboard";
-        const dashboardHint = delegatedDashboardAccess && delegatedDashboardDetails
-            ? `Mirrors ${delegatedDashboardDetails.delegatedFromName || delegatedDashboardDetails.delegatedFromEmail}`
-            : dashboardRole === 'head_unit'
-                ? "Monitor team wellness"
-                : "Monitor & analyze";
+        const dashboardLabel = isUnitDashboard ? "Unit Dashboard" : "Emotional Dashboard";
+        const dashboardHint = isUnitDashboard ? "Monitor unit wellness" : "Monitor & analyze";
+        const ownStats = { title: "My Stats", hint: `${user.completed} check-ins`, icon: TrendingUp, to: "/profile/personal-stats" };
+        const ownHistory = { title: "Emotional History", hint: "Reflection & thoughts", icon: Calendar, to: "/profile/emotional-history" };
+        const ownPatterns = { title: "Emotional Patterns", hint: "Insights & patterns", icon: Activity, to: "/profile/emotional-patterns" };
 
-        if (isAdminRole) {
-            return [
-                { title: dashboardLabel, hint: dashboardHint, icon: BarChart3, to: "/emotional-checkin/dashboard" },
-                { title: "User Management", hint: "Manage users", icon: UserCog, to: "/user-management" },
-            ];
-        }
-
-        if (isHeadUnitRole) {
-            return [
-                { title: "Unit Dashboard", hint: "Monitor team wellness", icon: BarChart3, to: "/emotional-checkin/dashboard" },
-                { title: "My Stats", hint: `${user.completed} check-ins`, icon: TrendingUp, to: "/profile/personal-stats" },
-            ];
-        }
-
-        if (canAccessDashboard) {
-            return [
-                { title: dashboardLabel, hint: dashboardHint, icon: BarChart3, to: "/emotional-checkin/dashboard" },
-                { title: "My Stats", hint: `${user.completed} check-ins`, icon: TrendingUp, to: "/profile/personal-stats" },
-                { title: "Emotional History", hint: "Reflection & thoughts", icon: Calendar, to: "/profile/emotional-history" },
-            ];
-        }
-
-        return [
-            { title: "My Stats", hint: `${user.completed} check-ins`, icon: TrendingUp, to: "/profile/personal-stats" },
-            { title: "Emotional History", hint: "Reflection & thoughts", icon: Calendar, to: "/profile/emotional-history" },
-            { title: "Emotional Patterns", hint: "Insights & patterns", icon: Activity, to: "/profile/emotional-patterns" },
-        ];
-    }, [user.completed, currentUser, dashboardRole, delegatedDashboardAccess, delegatedDashboardDetails, canAccessDashboard]);
+        const actions = [];
+        if (canAccessDashboard) actions.push({ title: dashboardLabel, hint: dashboardHint, icon: BarChart3, to: "/emotional-checkin/dashboard" });
+        if (canManageUsers) actions.push({ title: "User Directory", hint: "People synced from Central", icon: UserCog, to: "/user-management" });
+        if (canSeeOwnHistory) actions.push(ownStats, ownHistory);
+        if (!canAccessDashboard && !canManageUsers && canSeeOwnHistory) actions.push(ownPatterns);
+        return actions.slice(0, 3);
+    }, [user.completed, isUnitDashboard, canAccessDashboard, canManageUsers, canSeeOwnHistory]);
 
     // Signing out lives in the Hub, where one sign-out covers every app.
     const handleBackToHub = () => {
@@ -1199,7 +1159,7 @@ const ProfilePage = memo(function ProfilePage() {
                         <p className="mt-0.5 text-xs text-muted-foreground">{getDynamicSubGreeting()}</p>
                     </div>
 
-                    {isAdminPrincipal && (
+                    {hasMtss && (
                         <button
                             onClick={() => navigate("/mtss")}
                             className="inline-flex items-center gap-2 rounded-full border border-border/50 bg-card/60 px-4 py-2 text-xs font-semibold text-foreground hover:border-primary/40 hover:bg-primary/5 transition"
@@ -1265,7 +1225,7 @@ const ProfilePage = memo(function ProfilePage() {
                                                 View History <ChevronRight className="h-3.5 w-3.5" />
                                             </Link>
                                         ) : (
-                                            <Link to={currentUser?.role === 'student' ? '/student/emotional-checkin' : (currentUser?.role === 'staff' || currentUser?.role === 'teacher') ? '/emotional-checkin/staff' : '/emotional-checkin'} className="inline-flex items-center gap-2 rounded-md border border-border/50 px-3 py-1.5 text-xs hover:border-primary/40 hover:bg-primary/5 transition-colors">
+                                            <Link to={isStudent ? '/student/emotional-checkin' : '/emotional-checkin/staff'} className="inline-flex items-center gap-2 rounded-md border border-border/50 px-3 py-1.5 text-xs hover:border-primary/40 hover:bg-primary/5 transition-colors">
                                                 Start Check-in <ChevronRight className="h-3.5 w-3.5" />
                                             </Link>
                                         )}

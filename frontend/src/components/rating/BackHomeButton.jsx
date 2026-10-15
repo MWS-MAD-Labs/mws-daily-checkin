@@ -4,13 +4,14 @@ import { Link } from "react-router-dom";
 import { Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSelector } from "react-redux";
-import { hasEmotionalDashboardAccess } from "@/utils/accessControl";
+import { hasDashboard } from "@/utils/accessControl";
+import { DASHBOARD } from "@/constants/enums";
 
 const BackHomeButton = memo(() => {
     const { user } = useSelector((state) => state.auth);
 
     // Determine home route based on user role/delegated access
-    const homeRoute = hasEmotionalDashboardAccess(user)
+    const homeRoute = hasDashboard(user, DASHBOARD.STAFF)
         ? '/emotional-checkin/dashboard'
         : '/profile';
 

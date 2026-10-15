@@ -1,3 +1,6 @@
+import { getAssistantProfile, hasPermission } from "@/utils/accessControl";
+import { AUTOMATION_PROFILE } from "@/constants/enums";
+import { PERMISSIONS } from "@/constants/permissions";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUpRight, BellRing, MessageCircle, Send, Sparkles, X } from "lucide-react";
@@ -21,13 +24,11 @@ import {
     detectDockLiveInsightIntent
 } from "@/utils/utilityDockContext";
 import {
-    canExecuteAutomationRole,
     buildOperationPayloadFromForm,
     detectDockOperationIntent,
     getDockOperationFormConfig,
     getOperationLabel,
     isOperationAllowedForRole,
-    normalizeRoleName
 } from "@/utils/utilityDockAutomation";
 import { applyThemePreference, emitThemeSpell, getStoredTheme, persistTheme } from "@/lib/theme";
 import UtilityDockWidgetPreview from "@/components/app/dock/UtilityDockWidgetPreview";
@@ -535,9 +536,9 @@ const UtilityDock = memo(() => {
         [assistantProfile?.assistant?.daily?.quickActions]
     );
 
-    const normalizedRole = normalizeRole(user?.role);
-    const normalizedAutomationRole = normalizeRoleName(normalizedRole);
-    const canRunAutomation = canExecuteAutomationRole(normalizedAutomationRole);
+    const normalizedRole = getAssistantProfile(user);
+    const canRunAutomation = hasPermission(user, PERMISSIONS.ASSISTANT_AUTOMATION_EXECUTE);
+    const normalizedAutomationRole = canRunAutomation ? AUTOMATION_PROFILE : "";
     const assistantChatPath = getAssistantChatPath(normalizedRole);
     const isStudent = isStudentRole(normalizedRole);
     const quickActionItems = useMemo(

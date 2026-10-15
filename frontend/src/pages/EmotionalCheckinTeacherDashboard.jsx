@@ -3,6 +3,8 @@ import { useLocation } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { Calendar, Search, Users, AlertTriangle, CheckCircle2, Filter } from "lucide-react";
 import { getTeacherDailyCheckins } from "@/services/checkinService";
+import { getDashboardScopeMode } from "@/utils/accessControl";
+import { DASHBOARD, SCOPE_MODE } from "@/constants/enums";
 import StudentCheckinInsightCard from "@/components/emotion-staff/StudentCheckinInsightCard";
 import "@/pages/styles/checkin-dashboard-collage.css";
 
@@ -46,8 +48,8 @@ const EmotionalCheckinTeacherDashboard = () => {
     const [error, setError] = useState("");
     const [payload, setPayload] = useState(null);
 
-    const userRole = user?.role || "";
-    const isPrincipalView = ["head_unit", "directorate", "admin", "superadmin"].includes(userRole);
+    const studentScopeMode = getDashboardScopeMode(user, DASHBOARD.STUDENT);
+    const isPrincipalView = studentScopeMode === SCOPE_MODE.UNIT || studentScopeMode === SCOPE_MODE.ALL;
     const classLabels = useMemo(() => formatClassLabels(user?.classes), [user?.classes]);
     const scope = payload?.scope || {};
     const scopeUnit = scope.unit || user?.unit || user?.department || "";
