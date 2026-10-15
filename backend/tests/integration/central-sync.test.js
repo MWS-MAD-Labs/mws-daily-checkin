@@ -31,6 +31,8 @@ const fakeApi = (over = {}) => ({
 describe('sync with Central', () => {
     beforeAll(async () => {
         await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/integra-learn-test');
+        // An older run may have left the index the model no longer has (it was unique once).
+        await Person.syncIndexes();
     });
     afterAll(async () => {
         await Person.deleteMany({ email: /@sync-test\.id$/ });
