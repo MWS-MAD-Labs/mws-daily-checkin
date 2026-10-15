@@ -6,7 +6,7 @@ jest.mock('../../src/utils/hubSessionUser', () => require('../helpers/hubTestSes
 
 const { cookieFor } = require('../helpers/hubTestSession');
 const { app } = require('../../src/app');
-const User = require('../../src/models/User');
+const Person = require('../../src/models/Person');
 
 // The Hub owns signing in and out; this app only reads the Hub's session (see middleware/auth.js).
 describe('Authentication API', () => {
@@ -15,12 +15,12 @@ describe('Authentication API', () => {
     });
 
     afterAll(async () => {
-        await User.deleteMany({});
+        await Person.deleteMany({});
         await mongoose.connection.close();
     });
 
     beforeEach(async () => {
-        await User.deleteMany({});
+        await Person.deleteMany({});
     });
 
     describe('GET /auth/me', () => {
@@ -35,13 +35,13 @@ describe('Authentication API', () => {
         });
 
         it('answers 403 for a deactivated account', async () => {
-            await User.create({ email: 'off@school.com', password: 'password123', name: 'Off', role: 'staff', centralPersonId: 'off-person', isActive: false });
+            await Person.create({ email: 'off@school.com', name: 'Off', personType: 'employee', centralPersonId: 'off-person', isActive: false });
             const response = await request(app).get('/auth/me').set('Cookie', cookieFor('off-person'));
             expect(response.status).toBe(403);
         });
 
         it('returns the signed-in person', async () => {
-            await User.create({ email: 'on@school.com', password: 'password123', name: 'On', role: 'staff', centralPersonId: 'on-person' });
+            await Person.create({ email: 'on@school.com', name: 'On', personType: 'employee', centralPersonId: 'on-person' });
             const response = await request(app).get('/auth/me').set('Cookie', cookieFor('on-person'));
             expect(response.status).toBe(200);
             expect(response.body.data.user.email).toBe('on@school.com');

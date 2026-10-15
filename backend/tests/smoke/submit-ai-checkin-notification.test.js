@@ -20,13 +20,7 @@ EmotionalCheckinMock.findById = jest.fn();
 
 jest.mock('../../src/models/EmotionalCheckin', () => EmotionalCheckinMock);
 
-jest.mock('../../src/models/UserStudent', () => ({
-  findById: jest.fn(() => ({
-    select: jest.fn().mockResolvedValue(null)
-  }))
-}));
-
-jest.mock('../../src/models/User', () => ({
+jest.mock('../../src/models/Person', () => ({
   findById: jest.fn((id) => ({
     select: jest.fn().mockResolvedValue(
       String(id) === userId
@@ -89,7 +83,7 @@ describe('AI submit support notification regression', () => {
 
   test('sends support notifications when support contact is selected', async () => {
     const req = {
-      user: { id: userId, role: 'staff' },
+      user: { id: userId, personType: 'employee', role: 'staff' },
       body: {
         weatherType: 'sunny',
         selectedMoods: ['grateful'],

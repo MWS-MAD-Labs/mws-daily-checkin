@@ -3,7 +3,7 @@ jest.mock('../../src/models/EmotionalCheckin', () => ({
   countDocuments: jest.fn()
 }));
 
-jest.mock('../../src/models/User', () => ({
+jest.mock('../../src/models/Person', () => ({
   findById: jest.fn()
 }));
 
@@ -24,7 +24,7 @@ jest.mock('../../src/utils/response', () => ({
 }));
 
 const EmotionalCheckin = require('../../src/models/EmotionalCheckin');
-const User = require('../../src/models/User');
+const Person = require('../../src/models/Person');
 const { sendSuccess, sendError } = require('../../src/utils/response');
 const { getUserCheckinHistory } = require('../../src/controllers/dashboardController');
 
@@ -38,7 +38,7 @@ const buildFindChain = (result = []) => ({
 
 describe('Dashboard user-history authorization', () => {
   const mockTargetUser = (record) => {
-    User.findById.mockReturnValue({
+    Person.findById.mockReturnValue({
       select: jest.fn().mockResolvedValue(record)
     });
   };

@@ -1,3 +1,5 @@
+const { PERSON_TYPE } = require('../constants/enums');
+const { deriveJobKind } = require('./jobKind');
 const { lookupEmployeeByEmail, lookupEmployeeByPersonId, lookupEmployeeByEmployeeId } = require('../services/mwsDataCenterClient');
 
 // email is included so callers can tell when a live login email has drifted
@@ -14,7 +16,13 @@ function mapCentralEmployee(centralEmployee) {
         jobLevel: centralEmployee.job_level,
         employmentStatus: centralEmployee.employment_type,
         department: centralEmployee.unit,
-        unit: centralEmployee.unit
+        unit: centralEmployee.unit,
+        // Only a label, worked out from Central's job level and position.
+        jobKind: deriveJobKind({
+            personType: PERSON_TYPE.EMPLOYEE,
+            jobLevel: centralEmployee.job_level,
+            jobPosition: centralEmployee.job_position
+        })
     };
 }
 
@@ -47,4 +55,4 @@ async function syncEmployeeFromCentralWithFallback(email, existingEmployeeId) {
     return mapCentralEmployee(centralEmployee);
 }
 
-module.exports = { syncEmployeeFromCentral, syncEmployeeFromCentralWithFallback };
+module.exports = { syncEmployeeFromCentral, syncEmployeeFromCentralWithFallback, mapCentralEmployee };

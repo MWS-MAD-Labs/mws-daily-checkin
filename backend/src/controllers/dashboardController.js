@@ -1,10 +1,10 @@
 const EmotionalCheckin = require('../models/EmotionalCheckin');
 const StudentEmotionalCheckin = require('../models/StudentEmotionalCheckin');
-const User = require('../models/User');
+const Person = require('../models/Person');
 const cacheService = require('../services/cacheService');
 const notificationService = require('../services/notificationService');
 const { sendSuccess, sendError } = require('../utils/response');
-const { SCOPE_MODE } = require('../constants/enums');
+const { SCOPE_MODE, PERSON_TYPE } = require('../constants/enums');
 const { staffInScope } = require('../utils/accessScope');
 const { buildFrontendUrl } = require('../utils/frontendUrl');
 const {
@@ -126,7 +126,7 @@ const CHECKIN_USER_POPULATE = [
 
 const CHECKIN_SUPPORT_CONTACT_POPULATE = {
     path: 'supportContactUserId',
-    select: 'name email role department unit'
+    select: 'name email personType jobKind department unit'
 };
 
 const applyResolvedUserScope = (query, userIds = []) => {
@@ -176,10 +176,11 @@ const resolveScopedStaff = async (viewer = {}) => {
     if (scope.mode !== SCOPE_MODE.UNIT) return [];
 
     const viewerId = (viewer.id || viewer._id || '').toString();
-    const scopedUsers = await User.find({
+    const scopedUsers = await Person.find({
+        personType: PERSON_TYPE.EMPLOYEE,
         isActive: true,
         $or: [{ unit: scope.unit }, { department: scope.unit }]
-    }).select('_id name email role department unit reportsTo subordinates');
+    }).select('_id name email personType jobKind department unit reportsTo subordinates');
     return dedupeUsersById(scopedUsers).filter((user) => user._id?.toString() !== viewerId);
 };
 
@@ -377,14 +378,14 @@ const getDashboardStats = async (req, res) => {
             }
 
             // Get all users for role-based statistics (narrowed to the viewer's scope)
-            let userQuery = { isActive: true };
+            let userQuery = { personType: PERSON_TYPE.EMPLOYEE, isActive: true };
             if (userRole !== SCOPE_MODE.ALL) {
                 userQuery = { _id: { $in: scopedUserIds } };
             }
 
             const allUsers = userRole !== SCOPE_MODE.ALL
                 ? scopedUnitUsers
-                : await User.find(userQuery, 'name email role department unit');
+                : await Person.find(userQuery, 'name email personType jobKind department unit');
             const totalUsersByRole = countUsersByRole(allUsers);
 
             // Basic stats
@@ -966,13 +967,13 @@ const getRecentCheckins = async (req, res) => {
 
         // Add role filter
         if (role) {
-            const roleUsers = await User.find({ role }).select('_id');
+            const roleUsers = await Person.find({ personType: PERSON_TYPE.EMPLOYEE, jobKind: role }).select('_id');
             scopedIds = intersectScopedUserIds(scopedIds, roleUsers.map((user) => user._id));
         }
 
         // Add department filter
         if (department) {
-            const departmentUsers = await User.find({ department }).select('_id');
+            const departmentUsers = await Person.find({ personType: PERSON_TYPE.EMPLOYEE, department }).select('_id');
             scopedIds = intersectScopedUserIds(scopedIds, departmentUsers.map((user) => user._id));
         }
 
@@ -1041,7 +1042,7 @@ const getUserTrends = async (req, res) => {
             return sendError(res, 'User ID is required', 400);
         }
 
-        const trendTarget = await User.findById(userId, 'unit department');
+        const trendTarget = await Person.findById(userId, 'unit department');
         if (!(await canViewStaffMember(req.user, trendTarget))) {
             return sendError(res, 'This person is outside your dashboard scope', 403);
         }
@@ -1321,7 +1322,7 @@ const getUserDashboardData = async (req, res) => {
         }
 
         // Get user details
-        const user = await User.findById(userId, 'name email role department unit');
+        const user = await Person.findById(userId, 'name email personType jobKind department unit');
         if (!user) {
             return sendError(res, 'User not found', 404);
         }
@@ -1344,7 +1345,7 @@ const getUserDashboardData = async (req, res) => {
             $or: resolvedUserScope.$or
         })
             .sort({ date: -1 })
-            .populate('supportContactUserId', 'name role department')
+            .populate('supportContactUserId', 'name personType jobKind department')
             .select('weatherType selectedMoods presenceLevel capacityLevel aiAnalysis details date submittedAt supportContactUserId supportContactResponse');
 
         // Calculate comprehensive analytics
@@ -1486,7 +1487,7 @@ const getUserCheckinHistory = async (req, res) => {
             return sendError(res, 'User ID is required', 400);
         }
 
-        const target = await User.findById(userId).select('unit department');
+        const target = await Person.findById(userId).select('unit department');
         if (!target) {
             return sendError(res, 'User not found', 404);
         }
@@ -1499,8 +1500,8 @@ const getUserCheckinHistory = async (req, res) => {
             .sort({ date: -1 })
             .limit(parseInt(limit))
             .skip(parseInt(offset))
-            .populate('userId', 'name email role department')
-            .populate('supportContactUserId', 'name role department')
+            .populate('userId', 'name email personType jobKind department')
+            .populate('supportContactUserId', 'name personType jobKind department')
             .select('weatherType selectedMoods presenceLevel capacityLevel aiAnalysis details date submittedAt supportContactUserId');
 
         const totalCount = await EmotionalCheckin.countDocuments({ userId });
@@ -1670,7 +1671,7 @@ const getUnitMembers = async (req, res) => {
         });
 
         // Build query based on user role
-        let userQuery = { isActive: true };
+        let userQuery = { personType: PERSON_TYPE.EMPLOYEE, isActive: true };
 
         // Narrow to the viewer's unit unless they may see everyone.
         if (userRole !== SCOPE_MODE.ALL) {
@@ -1680,7 +1681,7 @@ const getUnitMembers = async (req, res) => {
             };
         }
 
-        const unitMembers = await User.find(userQuery, 'name email role department unit isActive')
+        const unitMembers = await Person.find(userQuery, 'name email personType jobKind department unit isActive')
             .sort({ name: 1 });
 
         // Calculate statistics for each member

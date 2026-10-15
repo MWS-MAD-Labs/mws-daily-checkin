@@ -27,9 +27,8 @@ const hubSessionModule = {
 
 const hubSessionUserModule = {
     resolveSessionUser: async (claims) => {
-        const User = require('../../src/models/User');
-        const UserStudent = require('../../src/models/UserStudent');
-        return (await User.findOne({ centralPersonId: claims.sub })) || (await UserStudent.findOne({ centralPersonId: claims.sub }));
+        const Person = require('../../src/models/Person');
+        return Person.findOne({ centralPersonId: claims.sub });
     },
     clearEntitlementCache: () => {},
 };

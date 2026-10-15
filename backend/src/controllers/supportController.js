@@ -1,4 +1,5 @@
-const User = require('../models/User');
+const Person = require('../models/Person');
+const { PERSON_TYPE, JOB_KIND } = require('../constants/enums');
 const { sendSuccess, sendError } = require('../utils/response');
 
 const CORE_SUPPORT_CONTACTS = [
@@ -209,7 +210,7 @@ const assignmentMatchesStudentClass = (assignment, studentClassInfo) => {
 // Get all directorate and head_unit users for support contacts
 const getSupportContacts = async (req, res) => {
     try {
-        const userRole = req.user.role;
+        const userRole = req.user.personType === PERSON_TYPE.STUDENT ? JOB_KIND.STUDENT : req.user.jobKind;
         const userDepartment = req.user.department; // Get user's department (Elementary/Junior High)
 
         // Define which roles can be contacted based on user's role
@@ -231,8 +232,8 @@ const getSupportContacts = async (req, res) => {
                 // job shows up here automatically, no code change needed
                 // when the person changes.
                 specificUsers = [
-                    { role: 'head_unit', unit: userDepartment, contactCategory: 'principal' },
-                    { role: 'counselor', contactCategory: 'psychologist' }
+                    { jobKind: JOB_KIND.HEAD_UNIT, unit: userDepartment, contactCategory: 'principal' },
+                    { jobKind: JOB_KIND.COUNSELOR, contactCategory: 'psychologist' }
                 ];
                 break;
             case 'teacher':
@@ -255,12 +256,13 @@ const getSupportContacts = async (req, res) => {
 
         // Get role-based contacts
         if (contactableRoles.length > 0) {
-            const roleBasedUsers = await User.find({
-                role: { $in: contactableRoles },
+            const roleBasedUsers = await Person.find({
+                personType: PERSON_TYPE.EMPLOYEE,
+                jobKind: { $in: contactableRoles },
                 isActive: true,
                 _id: { $ne: req.user.id } // Exclude self
             })
-                .select('name username email department employeeId role jobLevel unit jobPosition gender')
+                .select('name username email department employeeId personType jobKind jobLevel unit jobPosition gender')
                 .sort({ name: 1 });
             supportUsers = [...roleBasedUsers];
         }
@@ -268,14 +270,14 @@ const getSupportContacts = async (req, res) => {
         // Add specific contacts for students (principal by role+unit, psychologist by role)
         if (userRole === 'student' && specificUsers.length > 0) {
             for (const specificUser of specificUsers) {
-                const matcher = specificUser.role
-                    ? { role: specificUser.role, ...(specificUser.unit ? { unit: specificUser.unit } : {}) }
+                const matcher = specificUser.jobKind
+                    ? { jobKind: specificUser.jobKind, ...(specificUser.unit ? { unit: specificUser.unit } : {}) }
                     : { email: specificUser.email };
-                const foundUser = await User.findOne({
+                const foundUser = await Person.findOne({
                     ...matcher,
                     isActive: true
                 })
-                    .select('name username email department employeeId role jobLevel unit jobPosition gender');
+                    .select('name username email department employeeId personType jobKind jobLevel unit jobPosition gender');
 
                 if (foundUser && !supportUsers.find(u => u._id.toString() === foundUser._id.toString())) {
                     foundUser.contactCategory = specificUser.contactCategory || 'other';
@@ -298,10 +300,10 @@ const getSupportContacts = async (req, res) => {
                 const centralContacts = await getStudentSupportContacts(req.user.email);
 
                 for (const centralTeacher of centralContacts?.teachers || []) {
-                    const localTeacher = await User.findOne({
+                    const localTeacher = await Person.findOne({
                         email: centralTeacher.email,
                         isActive: true
-                    }).select('name username email department employeeId role jobLevel unit jobPosition gender');
+                    }).select('name username email department employeeId personType jobKind jobLevel unit jobPosition gender');
 
                     if (!localTeacher || supportUsers.find(u => u._id.toString() === localTeacher._id.toString())) {
                         continue;
@@ -337,7 +339,7 @@ const getSupportContacts = async (req, res) => {
                 const studentOrganizations = await Organization.find({
                     'members.userId': req.user.id,
                     type: 'class'
-                }).populate('members.userId', 'name role');
+                }).populate('members.userId', 'name personType jobKind');
 
                 // Get teachers from these classes
                 for (const org of studentOrganizations) {
@@ -347,9 +349,9 @@ const getSupportContacts = async (req, res) => {
                     });
 
                     for (const teacherMember of teacherMembers) {
-                        if (teacherMember.userId && ['teacher', 'se_teacher'].includes(teacherMember.userId.role)) {
-                            const teacherUser = await User.findById(teacherMember.userId._id)
-                                .select('name username email department employeeId role jobLevel unit jobPosition gender classes');
+                        if (teacherMember.userId && [JOB_KIND.TEACHER, JOB_KIND.SE_TEACHER].includes(teacherMember.userId.jobKind)) {
+                            const teacherUser = await Person.findById(teacherMember.userId._id)
+                                .select('name username email department employeeId personType jobKind jobLevel unit jobPosition gender classes');
 
                             if (teacherUser && !supportUsers.find(u => u._id.toString() === teacherUser._id.toString())) {
                                 const matchedCategory = assignmentMatchesStudentClass({
@@ -383,14 +385,15 @@ const getSupportContacts = async (req, res) => {
             try {
                 const studentUnit = req.user.unit || req.user.department;
                 const studentDepartment = req.user.department || req.user.unit;
-                const teacherCandidates = await User.find({
-                    role: { $in: ['teacher', 'se_teacher'] },
+                const teacherCandidates = await Person.find({
+                    personType: PERSON_TYPE.EMPLOYEE,
+                    jobKind: { $in: [JOB_KIND.TEACHER, JOB_KIND.SE_TEACHER] },
                     $or: [
                         { unit: studentUnit },
                         { department: studentDepartment }
                     ],
                     isActive: true
-                }).select('name username email department employeeId role jobLevel unit jobPosition gender classes');
+                }).select('name username email department employeeId personType jobKind jobLevel unit jobPosition gender classes');
 
                 for (const teacher of teacherCandidates) {
                     const classes = Array.isArray(teacher.classes) ? teacher.classes : [];
@@ -436,11 +439,11 @@ const getSupportContacts = async (req, res) => {
                 let existingContact = supportUsers.find(user => user.email === specialContact.email);
 
                 if (!existingContact) {
-                    const foundSpecial = await User.findOne({
+                    const foundSpecial = await Person.findOne({
                         email: specialContact.email,
                         isActive: true,
                         _id: { $ne: req.user.id }
-                    }).select('name username email department employeeId role jobLevel unit jobPosition gender');
+                    }).select('name username email department employeeId personType jobKind jobLevel unit jobPosition gender');
 
                     if (foundSpecial) {
                         foundSpecial.specialSupportTag = specialContact.priorityTag || 'priority';

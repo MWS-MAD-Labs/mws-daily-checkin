@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const User = require('../models/User');
-const UserStudent = require('../models/UserStudent');
+const Person = require('../models/Person');
 const { sendSuccess, sendError } = require('../utils/response');
 const { hasMtssAccess } = require('../utils/accessControl');
 const { buildRequestUser } = require('../middleware/auth');
@@ -21,8 +20,7 @@ router.get('/sso', (req, res) => {
 router.get('/me', require('../middleware/auth').authenticate, async (req, res) => {
     try {
         // Fetch fresh user data from database for security
-        const userModel = req.user.role === 'student' ? UserStudent : User;
-        const user = await userModel.findById(req.user.id).select('-password -googleProfile');
+        const user = await Person.findById(req.user.id);
 
         if (!user) {
             console.error('❌ User not found in /auth/me endpoint:', req.user.id);

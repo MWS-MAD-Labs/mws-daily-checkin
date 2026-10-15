@@ -5,6 +5,7 @@ jest.mock('../../src/services/mwsDataCenterClient', () => ({
 }));
 jest.mock('../../src/utils/employeeCentralSync', () => ({
     syncEmployeeFromCentral: jest.fn(),
+    mapCentralEmployee: jest.fn(),
 }));
 jest.mock('../../src/utils/studentCentralSync', () => ({
     syncStudentFromCentral: jest.fn(),
@@ -13,7 +14,7 @@ jest.mock('../../src/utils/studentCentralSync', () => ({
 const { lookupApplicationEntitlement } = require('../../src/services/mwsDataCenterClient');
 const { syncEmployeeFromCentral } = require('../../src/utils/employeeCentralSync');
 const { resolveSessionUser, clearEntitlementCache } = require('../../src/utils/hubSessionUser');
-const User = require('../../src/models/User');
+const Person = require('../../src/models/Person');
 
 const EMPLOYEE_FIELDS = {
     centralPersonId: 'person-session',
@@ -45,14 +46,14 @@ describe('resolveSessionUser', () => {
     });
 
     afterAll(async () => {
-        await User.deleteMany({ email: /@sso-test-checkin\.millennia21\.id$/ });
+        await Person.deleteMany({ email: /@sso-test-checkin\.millennia21\.id$/ });
         await mongoose.connection.close();
     });
 
     beforeEach(async () => {
         jest.clearAllMocks();
         clearEntitlementCache();
-        await User.deleteMany({ email: /@sso-test-checkin\.millennia21\.id$/ });
+        await Person.deleteMany({ email: /@sso-test-checkin\.millennia21\.id$/ });
         syncEmployeeFromCentral.mockResolvedValue({ ...EMPLOYEE_FIELDS });
     });
 

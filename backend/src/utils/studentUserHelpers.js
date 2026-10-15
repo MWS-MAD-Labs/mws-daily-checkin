@@ -1,3 +1,5 @@
+const { JOB_KIND } = require('../constants/enums');
+
 const normalizeString = (value) => {
     if (value === undefined || value === null) return undefined;
     const trimmed = String(value).trim();
@@ -65,8 +67,6 @@ const buildStudentUserPayload = ({
     currentGrade,
     className,
     joinAcademicYear,
-    googleId,
-    googleProfile,
     centralPersonId
 }) => {
     const normalizedEmail = normalizeEmail(email);
@@ -78,7 +78,6 @@ const buildStudentUserPayload = ({
         // Central's Person.id - see the matching note on models/User.js.
         centralPersonId: normalizeString(centralPersonId),
         name: normalizeString(name),
-        role: 'student',
         username,
         nickname: normalizeString(nickname),
         gender: normalizeGender(gender),
@@ -86,9 +85,8 @@ const buildStudentUserPayload = ({
         currentGrade: normalizeString(currentGrade),
         className: normalizeString(className),
         joinAcademicYear: normalizeString(joinAcademicYear),
-        ...unitInfo,
-        googleId: normalizeString(googleId),
-        googleProfile: googleProfile || undefined
+        jobKind: JOB_KIND.STUDENT,
+        ...unitInfo
     };
 };
 

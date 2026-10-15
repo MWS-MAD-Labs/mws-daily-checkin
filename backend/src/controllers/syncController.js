@@ -1,7 +1,6 @@
 const winston = require('winston');
 const SyncStatus = require('../models/SyncStatus');
-const { syncStudentRoster } = require('../jobs/studentRosterSync');
-const { syncEmployeeRoster } = require('../jobs/employeeRosterSync');
+const { runSync } = require('../jobs/centralSync');
 const { sendSuccess, sendError } = require('../utils/response');
 
 const DOC_ID = 'manual-sync';
@@ -23,24 +22,25 @@ const toStatusPayload = (doc) => ({
     cooldownRemainingSeconds: cooldownRemainingSeconds(doc)
 });
 
-// Runs every roster sync job this app owns, exactly the same functions the
-// scheduled interval calls - no behavioral drift between "waited for it"
-// and "clicked the button". Neither job throws on a Central fetch failure
-// (both catch internally and resolve with skipped: true), so this never
-// needs to treat a settled promise as a partial failure.
+// Runs the same sync the timer runs, without waiting for Central's key to move. The result keeps the shape the
+// quick menu reads: one entry per part, each with updated, deactivated and skipped.
 async function runAllSyncJobs() {
-    const [student, employee] = await Promise.allSettled([
-        syncStudentRoster(),
-        syncEmployeeRoster()
-    ]);
-
+    const result = await runSync({ force: true });
+    const failed = result.status === 'error' || result.status === 'locked';
+    const access = result.summary || {};
+    const profiles = result.profiles || {};
     return {
-        studentRoster: student.status === 'fulfilled'
-            ? student.value
-            : { skipped: true, error: student.reason?.message || 'unknown error' },
-        employeeRoster: employee.status === 'fulfilled'
-            ? employee.value
-            : { skipped: true, error: employee.reason?.message || 'unknown error' }
+        access: {
+            updated: (access.created || 0) + (access.updated || 0),
+            deactivated: access.revoked || 0,
+            skipped: failed,
+            ...(result.message ? { error: result.message } : {})
+        },
+        profiles: {
+            updated: (profiles.updated || 0) + (profiles.reactivated || 0),
+            deactivated: profiles.deactivated || 0,
+            skipped: failed || Boolean(profiles.skipped)
+        }
     };
 }
 

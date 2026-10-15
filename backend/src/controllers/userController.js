@@ -1,4 +1,8 @@
-const User = require('../models/User');
+const Person = require('../models/Person');
+const { PERSON_TYPE, JOB_KIND } = require('../constants/enums');
+
+// User Management lists the employees synced from Central.
+const EMPLOYEES = { personType: PERSON_TYPE.EMPLOYEE };
 const Organization = require('../models/Organization');
 const { sendSuccess, sendError } = require('../utils/response');
 
@@ -10,8 +14,8 @@ const getUsers = async (req, res) => {
         const skip = (page - 1) * limit;
 
         // Build filter query
-        const filter = {};
-        if (req.query.role) filter.role = req.query.role;
+        const filter = { ...EMPLOYEES };
+        if (req.query.role) filter.jobKind = req.query.role;
         if (req.query.department) filter.department = req.query.department;
         if (req.query.unit) filter.unit = req.query.unit;
         if (req.query.jobLevel) filter.jobLevel = req.query.jobLevel;
@@ -28,10 +32,9 @@ const getUsers = async (req, res) => {
             ];
         }
 
-        const total = await User.countDocuments(filter);
-        const users = await User.find(filter)
-            .select('-password -googleProfile')
-            .populate('reportsTo', 'name jobPosition')
+        const total = await Person.countDocuments(filter);
+        const users = await Person.find(filter)
+            .select('-__v')
             .sort({ name: 1 })
             .skip(skip)
             .limit(limit);
@@ -57,10 +60,7 @@ const getUsers = async (req, res) => {
 // Get user by ID with full details
 const getUserById = async (req, res) => {
     try {
-        const user = await User.findById(req.params.id)
-            .select('-password -googleProfile')
-            .populate('reportsTo', 'name jobPosition department')
-            .populate('subordinates', 'name jobPosition department');
+        const user = await Person.findById(req.params.id).select('-__v');
 
         if (!user) {
             return sendError(res, 'User not found', 404);
@@ -87,36 +87,38 @@ const getUserById = async (req, res) => {
 // Filter options and headcount stats for the user directory
 const getOrganizationStructure = async (req, res) => {
     try {
-        const departments = await User.distinct('department');
-        const units = await User.distinct('unit');
-        const roles = await User.distinct('role');
-        const jobLevels = await User.distinct('jobLevel');
+        const departments = await Person.distinct('department', EMPLOYEES);
+        const units = await Person.distinct('unit', EMPLOYEES);
+        const roles = await Person.distinct('jobKind', EMPLOYEES);
+        const jobLevels = await Person.distinct('jobLevel', EMPLOYEES);
 
         // Get directorate members
-        const directorate = await User.find({
-            role: 'directorate',
+        const directorate = await Person.find({
+            ...EMPLOYEES,
+            jobKind: JOB_KIND.DIRECTORATE,
             isActive: true
         }).select('name jobPosition department').sort('name');
 
         // Get department heads
-        const departmentHeads = await User.find({
+        const departmentHeads = await Person.find({
+            ...EMPLOYEES,
             jobLevel: 'Head Unit',
             isActive: true
         }).select('name department unit jobPosition').sort('department');
 
         // Get statistics
         const stats = {
-            totalUsers: await User.countDocuments({ isActive: true }),
-            byRole: await User.aggregate([
-                { $match: { isActive: true } },
-                { $group: { _id: '$role', count: { $sum: 1 } } }
+            totalUsers: await Person.countDocuments({ ...EMPLOYEES, isActive: true }),
+            byRole: await Person.aggregate([
+                { $match: { ...EMPLOYEES, isActive: true } },
+                { $group: { _id: '$jobKind', count: { $sum: 1 } } }
             ]),
-            byDepartment: await User.aggregate([
-                { $match: { isActive: true, department: { $ne: null } } },
+            byDepartment: await Person.aggregate([
+                { $match: { ...EMPLOYEES, isActive: true, department: { $ne: null } } },
                 { $group: { _id: '$department', count: { $sum: 1 } } }
             ]),
-            byEmploymentStatus: await User.aggregate([
-                { $match: { isActive: true } },
+            byEmploymentStatus: await Person.aggregate([
+                { $match: { ...EMPLOYEES, isActive: true } },
                 { $group: { _id: '$employmentStatus', count: { $sum: 1 } } }
             ])
         };

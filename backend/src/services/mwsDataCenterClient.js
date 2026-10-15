@@ -164,7 +164,40 @@ async function lookupApplicationEntitlement(personId) {
   }
 }
 
+// A short key that changes only when something Daily keeps about a person's access changes (name, email, role,
+// permissions or who is a member). Asking for it is one small call, so it can be asked every minute.
+async function getApplicationEntitlementKey(applicationId = "daily-checkin") {
+  const { data } = await client.get("/application-entitlements/version", {
+    params: { application_id: applicationId },
+  });
+  return data.data?.key ?? null;
+}
+
+// Everybody Central lists for this application, with the key of the moment they were read. Throws on any page
+// failure instead of returning a partial list: callers revoke whoever is missing.
+async function listApplicationEntitlements(applicationId = "daily-checkin") {
+  const rows = [];
+  let key = null;
+  let page = 1;
+  let totalPages = 1;
+
+  do {
+    const { data } = await client.get("/application-entitlements", {
+      params: { application_id: applicationId, page, size: LIST_PAGE_SIZE },
+    });
+    rows.push(...data.data);
+    // A change between two pages gives a different key; the last one is the one to keep.
+    key = data.key ?? key;
+    totalPages = data.paging.total_page;
+    page += 1;
+  } while (page <= totalPages);
+
+  return { rows, key };
+}
+
 module.exports = {
+  getApplicationEntitlementKey,
+  listApplicationEntitlements,
   lookupApplicationEntitlement,
   lookupEmployeeByEmail,
   lookupEmployeeByPersonId,

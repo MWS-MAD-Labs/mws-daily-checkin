@@ -4,30 +4,16 @@ const { cookieFor } = require('../helpers/hubTestSession');
 
 jest.mock('../../src/utils/hubSession', () => require('../helpers/hubTestSession').hubSessionModule);
 jest.mock('../../src/utils/hubSessionUser', () => require('../helpers/hubTestSession').hubSessionUserModule);
-jest.mock('../../src/utils/employeeCentralSync', () => ({
-    syncEmployeeFromCentral: jest.fn().mockResolvedValue({
-        name: 'Test User',
-        employeeId: '99.99.001',
-        jobPosition: 'Staff',
-        jobLevel: 'Staff',
-        employmentStatus: 'Permanent',
-        department: 'Operational',
-        unit: 'Operational',
-    }),
-}));
-
-jest.mock('../../src/jobs/studentRosterSync', () => ({
-    syncStudentRoster: jest.fn(),
-}));
-jest.mock('../../src/jobs/employeeRosterSync', () => ({
-    syncEmployeeRoster: jest.fn(),
+jest.mock('../../src/jobs/centralSync', () => ({
+    runSync: jest.fn(),
+    start: jest.fn(),
+    stop: jest.fn(),
 }));
 
 const { app } = require('../../src/app');
-const User = require('../../src/models/User');
+const Person = require('../../src/models/Person');
 const SyncStatus = require('../../src/models/SyncStatus');
-const { syncStudentRoster } = require('../../src/jobs/studentRosterSync');
-const { syncEmployeeRoster } = require('../../src/jobs/employeeRosterSync');
+const { runSync } = require('../../src/jobs/centralSync');
 
 describe('Manual Sync Now endpoints', () => {
     let agent;
@@ -37,22 +23,24 @@ describe('Manual Sync Now endpoints', () => {
     });
 
     afterAll(async () => {
-        await User.deleteMany({});
+        await Person.deleteMany({});
         await mongoose.connection.close();
     });
 
     beforeEach(async () => {
         jest.clearAllMocks();
-        await User.deleteMany({});
+        await Person.deleteMany({});
         await SyncStatus.deleteMany({});
-        syncStudentRoster.mockResolvedValue({ checked: 10, updated: 2, deactivated: 0, skipped: false });
-        syncEmployeeRoster.mockResolvedValue({ checked: 5, updated: 1, deactivated: 0, roleDriftDetected: 0, skipped: false });
+        runSync.mockResolvedValue({
+            status: 'synced',
+            summary: { created: 1, updated: 1, revoked: 0 },
+            profiles: { updated: 2, deactivated: 0, reactivated: 0, skipped: false },
+        });
 
-        const user = await User.create({
+        const user = await Person.create({
             email: 'sync-test@school.com',
-            password: 'password123',
             name: 'Sync Test User',
-            role: 'staff',
+            personType: 'employee',
             centralPersonId: 'sync-person',
             centralEntitlementId: 'ent-sync-test',
             centralEntitlementApplicationId: 'daily-checkin',
@@ -80,14 +68,13 @@ describe('Manual Sync Now endpoints', () => {
         expect(trigger.status).toBe(401);
     });
 
-    it('runs every roster job and reports a merged result on trigger', async () => {
+    it('runs the sync once and reports a merged result on trigger', async () => {
         const response = await agent.post('/api/v1/sync/trigger');
 
         expect(response.status).toBe(200);
-        expect(syncStudentRoster).toHaveBeenCalledTimes(1);
-        expect(syncEmployeeRoster).toHaveBeenCalledTimes(1);
-        expect(response.body.data.lastResult.studentRoster.updated).toBe(2);
-        expect(response.body.data.lastResult.employeeRoster.updated).toBe(1);
+        expect(runSync).toHaveBeenCalledWith({ force: true });
+        expect(response.body.data.lastResult.access.updated).toBe(2);
+        expect(response.body.data.lastResult.profiles.updated).toBe(2);
         expect(response.body.data.lastTriggeredBy).toBe('sync-test@school.com');
         expect(response.body.data.cooldownRemainingSeconds).toBeGreaterThan(0);
     });
@@ -99,8 +86,7 @@ describe('Manual Sync Now endpoints', () => {
         const response = await agent.post('/api/v1/sync/trigger');
 
         expect(response.status).toBe(429);
-        expect(syncStudentRoster).not.toHaveBeenCalled();
-        expect(syncEmployeeRoster).not.toHaveBeenCalled();
+        expect(runSync).not.toHaveBeenCalled();
         expect(response.body.errors.cooldownRemainingSeconds).toBeGreaterThan(0);
     });
 
@@ -112,7 +98,6 @@ describe('Manual Sync Now endpoints', () => {
 
         const statuses = [first.status, second.status].sort();
         expect(statuses).toEqual([200, 429]);
-        expect(syncStudentRoster).toHaveBeenCalledTimes(1);
-        expect(syncEmployeeRoster).toHaveBeenCalledTimes(1);
+        expect(runSync).toHaveBeenCalledTimes(1);
     });
 });

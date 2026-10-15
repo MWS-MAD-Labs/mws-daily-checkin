@@ -1,5 +1,3 @@
-const User = require('../models/User');
-const UserStudent = require('../models/UserStudent');
 const { sendError } = require('../utils/response');
 const { hubSession } = require('../utils/hubSession');
 const { resolveSessionUser } = require('../utils/hubSessionUser');
@@ -10,7 +8,7 @@ const {
     hasMtssWriteAccess
 } = require('../utils/accessControl');
 const { resolveStudentScope, resolveStaffScope } = require('../utils/accessScope');
-const { PERSON_TYPE, SCOPE_MODE } = require('../constants/enums');
+const { SCOPE_MODE } = require('../constants/enums');
 
 const buildRequestUser = (user) => {
     const mtssAccess = buildMtssAccessProfile(user);
@@ -20,6 +18,9 @@ const buildRequestUser = (user) => {
         email: user.email,
         name: user.name,
         role: user.role,
+        jobKind: user.jobKind,
+        workingPeriod: user.workingPeriod,
+        joinDate: user.joinDate,
         username: user.username,
         employeeId: user.employeeId,
         department: user.department,
@@ -27,15 +28,12 @@ const buildRequestUser = (user) => {
         unit: user.unit,
         jobPosition: user.jobPosition,
         employmentStatus: user.employmentStatus,
-        googleId: user.googleId,
         classes: user.classes || [],
         currentGrade: user.currentGrade,
         className: user.className,
         nickname: user.nickname,
         gender: user.gender || '',
         joinAcademicYear: user.joinAcademicYear,
-        reportsTo: user.reportsTo,
-        subordinates: user.subordinates || [],
         mtssRole: mtssAccess.effectiveRole,
         mtssAccess,
         permissions: user.centralEntitlementPermissions || [],
@@ -43,7 +41,7 @@ const buildRequestUser = (user) => {
         entitlementId: user.centralEntitlementId || null,
         entitlementVersion: user.centralEntitlementVersion ?? null,
         entitlementOrganizationId: user.centralEntitlementOrganizationId || null,
-        personType: user.role === 'student' ? PERSON_TYPE.STUDENT : PERSON_TYPE.EMPLOYEE,
+        personType: user.personType,
     };
 
     // How much of each dashboard this person may open, worked out from what Central gave them.

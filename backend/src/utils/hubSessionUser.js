@@ -1,8 +1,7 @@
-const User = require('../models/User');
-const UserStudent = require('../models/UserStudent');
+const Person = require('../models/Person');
 const { lookupApplicationEntitlement } = require('../services/mwsDataCenterClient');
 const { validateEntitlement } = require('./centralEntitlement');
-const { resolveOrProvisionSsoUser } = require('./ssoUserResolution');
+const { resolveOrProvisionPerson } = require('./personResolution');
 
 // What Central says a person may do here is kept for a minute, so a change there shows up within that time and
 // most requests do not need Central at all.
@@ -34,7 +33,7 @@ async function currentEntitlement(personId) {
 }
 
 async function findLocalUser(personId) {
-    return (await User.findOne({ centralPersonId: personId })) || (await UserStudent.findOne({ centralPersonId: personId }));
+    return Person.findOne({ centralPersonId: personId });
 }
 
 // The local user behind a verified Hub token, or null when the person has no access to this application.
@@ -53,8 +52,7 @@ async function resolveSessionUser(claims) {
         return user;
     }
     // First visit, or Central changed what they may do: bring the local record in line.
-    return resolveOrProvisionSsoUser(claims.email, {
-        tags: claims.tags,
+    return resolveOrProvisionPerson(claims.email, {
         source: claims.source,
         personId: claims.sub,
         entitlement,
