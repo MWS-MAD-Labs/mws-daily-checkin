@@ -39,7 +39,6 @@ router.get('/me', require('../middleware/auth').authenticate, async (req, res) =
         console.log('🔐 /auth/me access - Role validation:', {
             userId: user._id,
             email: user.email,
-            role: responseUser.role,
             staffDashboard: responseUser.staffDashboardScope.mode,
             studentDashboard: responseUser.studentDashboardScope.mode,
             hasMtssAccess: hasMtssAccess(responseUser),

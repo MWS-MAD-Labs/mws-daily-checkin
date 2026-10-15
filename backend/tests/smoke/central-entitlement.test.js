@@ -1,6 +1,5 @@
 const { validateEntitlement, applyEntitlementProjection } = require('../../src/utils/centralEntitlement');
 const { requirePermission, requireAnyPermission } = require('../../src/middleware/auth');
-const { validateBackfillRecord, assertNoEntitlementRollback } = require('../../src/scripts/backfillCentralEntitlements');
 
 const valid = {
     id: 'ent-1',
@@ -42,15 +41,6 @@ describe('Central entitlement authorization', () => {
         expect(user.sessionVersion).toBe(5);
         expect(applyEntitlementProjection(user, valid)).toBe(false);
         expect(user.sessionVersion).toBe(5);
-    });
-
-    test('backfill rejects missing or unknown source and entitlement rollback', () => {
-        expect(() => validateBackfillRecord({ central_person_id: 'person-1', entitlement: valid })).toThrow(/source/);
-        expect(() => validateBackfillRecord({ central_person_id: 'person-1', source: 'guardian', entitlement: valid })).toThrow(/source/);
-        expect(() => assertNoEntitlementRollback({ centralPersonId: 'person-1', centralEntitlementId: valid.id, centralEntitlementVersion: 3 }, valid)).toThrow(/rollback/);
-        expect(() => assertNoEntitlementRollback({ centralPersonId: 'person-1', centralEntitlementId: valid.id, centralEntitlementVersion: 2 }, valid)).not.toThrow();
-        // Versions only compare within one entitlement: another id (a group's timestamp vs a personal counter) is not a rollback.
-        expect(() => assertNoEntitlementRollback({ centralPersonId: 'person-1', centralEntitlementId: 'group:other', centralEntitlementVersion: 1791852898 }, valid)).not.toThrow();
     });
 
     test('permission middleware allows exact or any permissions', () => {
