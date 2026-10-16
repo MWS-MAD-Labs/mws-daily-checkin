@@ -78,10 +78,14 @@ async function withRetries(call, { retries, wait }) {
 }
 
 function explain(error) {
-  const answer = error.response?.data?.errors || error.response?.data?.message;
-  return error.response
-    ? `Central said ${error.response.status}${answer ? `: ${typeof answer === "string" ? answer : JSON.stringify(answer)}` : ""}`
-    : error.message;
+  const data = error.response?.data;
+  const answer = data?.errors || data?.message;
+  if (!error.response) return error.message;
+  // Central's own refusals carry a message. Anything else (a wrong address, a proxy) is shown with where the call went.
+  const text = typeof answer === "string" ? answer : answer ? JSON.stringify(answer) : "";
+  const where = `${(error.config?.method || "").toUpperCase()} ${error.config?.url || ""}`.trim();
+  const page = !text && typeof data === "string" ? ` ${data.replace(/\s+/g, " ").slice(0, 120)}` : "";
+  return `Central said ${error.response.status}${text ? `: ${text}` : ""} (${where})${page}`;
 }
 
 async function sync(flags) {
@@ -173,5 +177,6 @@ module.exports = {
   connection,
   flagNumber,
   withRetries,
+  explain,
   DESCRIPTIONS,
 };
