@@ -29,8 +29,10 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8090}
       # Central's staging API, reached over the private LAN IP - swap for
       # https://db.mws.web.id/api/internal once the Cloudflare tunnel is live.
-      MWS_DATA_CENTER_API_URL: ${MWS_DATA_CENTER_API_URL}
-      MWS_DATA_CENTER_API_TOKEN: ${MWS_DATA_CENTER_API_TOKEN}
+      CENTRAL_API_BASE_URL: ${CENTRAL_API_BASE_URL:-}
+      CENTRAL_API_TOKEN: ${CENTRAL_API_TOKEN:-}
+      MWS_DATA_CENTER_API_URL: ${MWS_DATA_CENTER_API_URL:-}
+      MWS_DATA_CENTER_API_TOKEN: ${MWS_DATA_CENTER_API_TOKEN:-}
       GOOGLE_AI_API_KEY: ${GOOGLE_AI_API_KEY:-CHANGE_ME}
       CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-CHANGE_ME}
       CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-CHANGE_ME}

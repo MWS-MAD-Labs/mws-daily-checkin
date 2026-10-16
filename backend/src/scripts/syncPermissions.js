@@ -36,10 +36,10 @@ function buildManifest(values = PERMISSION_VALUES) {
   });
 }
 
-// Same names as the data center client, the old ones first so an environment that still has them keeps working.
+// Same names as the data center client. The names Central writes in its block come first, the old ones only when those are empty.
 function connection(env = process.env) {
-  const base = env.MWS_DATA_CENTER_API_URL || env.CENTRAL_API_BASE_URL;
-  const token = env.MWS_DATA_CENTER_API_TOKEN || env.CENTRAL_API_TOKEN;
+  const base = env.CENTRAL_API_BASE_URL || env.MWS_DATA_CENTER_API_URL;
+  const token = env.CENTRAL_API_TOKEN || env.MWS_DATA_CENTER_API_TOKEN;
   if (!base || !token) {
     throw new Error("CENTRAL_API_BASE_URL and CENTRAL_API_TOKEN must be set");
   }
