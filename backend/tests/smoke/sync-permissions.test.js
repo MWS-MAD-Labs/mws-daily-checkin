@@ -1,5 +1,5 @@
 const { PERMISSION_VALUES } = require('../../src/constants/permissions');
-const { buildManifest, connection, flagNumber, withRetries, DESCRIPTIONS } = require('../../src/scripts/syncPermissions');
+const { buildManifest, connection, flagNumber, withRetries, explain, DESCRIPTIONS } = require('../../src/scripts/syncPermissions');
 
 describe('permission sync', () => {
     it('sends every permission of the code, each with a description, and nothing else', () => {
@@ -25,6 +25,17 @@ describe('permission sync', () => {
             token: 'old',
         });
         expect(() => connection({})).toThrow(/must be set/);
+    });
+
+    it('says where a call went when the answer is not one of Central\'s own', () => {
+        const call = { method: 'put', url: 'https://db.example.com/application-permissions/me' };
+        expect(explain({ response: { status: 404, data: { errors: 'Application not found' } }, config: call })).toBe(
+            'Central said 404: Application not found (PUT https://db.example.com/application-permissions/me)',
+        );
+        expect(explain({ response: { status: 404, data: '<html>Not   Found</html>' }, config: call })).toBe(
+            'Central said 404 (PUT https://db.example.com/application-permissions/me) <html>Not Found</html>',
+        );
+        expect(explain({ message: 'timeout' })).toBe('timeout');
     });
 
     it('reads its flags', () => {
