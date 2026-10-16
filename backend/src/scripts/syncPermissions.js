@@ -5,6 +5,7 @@
 // It runs by hand, from "predev" and in the deploy workflow, with the same .env names the rest of the app reads.
 require("dotenv").config();
 const axios = require("axios");
+const { centralHeaders } = require("../utils/centralHeaders");
 const {
   PERMISSION_VALUES,
   PERMISSION_DETAILS,
@@ -92,7 +93,7 @@ async function sync(flags) {
   const { data } = await withRetries(
     () =>
       axios.put(url, body, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: centralHeaders(token),
         timeout: 10000,
       }),
     {
@@ -118,7 +119,7 @@ async function check(flags) {
   const { data } = await withRetries(
     () =>
       axios.get(url, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: centralHeaders(token),
         timeout: 10000,
       }),
     {

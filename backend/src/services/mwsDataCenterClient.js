@@ -1,4 +1,5 @@
 const axios = require("axios");
+const { centralHeaders } = require("../utils/centralHeaders");
 
 // Komodo's env for this service now names these CENTRAL_API_* - keep the
 // old MWS_DATA_CENTER_API_* names as a fallback for any environment that
@@ -8,7 +9,7 @@ const API_TOKEN = process.env.MWS_DATA_CENTER_API_TOKEN || process.env.CENTRAL_A
 
 const client = axios.create({
   baseURL: BASE_URL,
-  headers: { Authorization: `Bearer ${API_TOKEN}` },
+  headers: centralHeaders(API_TOKEN),
   timeout: 5000,
 });
 
