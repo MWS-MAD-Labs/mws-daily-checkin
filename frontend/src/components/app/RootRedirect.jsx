@@ -8,7 +8,7 @@ import { useSelector } from "react-redux";
 import PageLoader from "@/components/PageLoader";
 import { consumePendingRedirect, getDefaultPostLoginPath } from "@/utils/authRedirect";
 
-const LandingPage = lazy(() => import("@/pages/LandingPage"));
+const LandingPage = lazy(() => import("@/apps/user/desktop/pages/LandingPage"));
 
 const RootRedirect = () => {
     const { isAuthenticated, loading, user } = useSelector((state) => state.auth);

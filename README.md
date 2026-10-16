@@ -22,6 +22,8 @@ MTSS and the AI Assistant chat live in the `mws-mtss-system` repository.
 
 ## Local development
 
+Panduan memahami dan merapikan frontend: [`frontend/FRONTEND_REFACTOR_GUIDE.md`](frontend/FRONTEND_REFACTOR_GUIDE.md).
+
 ### Backend
 
 ```bash

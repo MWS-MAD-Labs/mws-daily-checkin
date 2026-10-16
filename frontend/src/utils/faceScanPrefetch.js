@@ -31,7 +31,7 @@ const prefetchVisionStack = () => {
 
 export const prefetchStaffFaceScanOnIntent = () => {
     if (!staffRoutePrefetchPromise) {
-        staffRoutePrefetchPromise = import('@/pages/VerificationPage').catch((error) => {
+        staffRoutePrefetchPromise = import('@/apps/user/desktop/pages/VerificationPage').catch((error) => {
             staffRoutePrefetchPromise = null;
             throw error;
         });
@@ -48,7 +48,7 @@ export const prefetchStaffFaceScanOnIntent = () => {
 
 export const prefetchStudentFaceScanOnIntent = () => {
     if (!studentRoutePrefetchPromise) {
-        studentRoutePrefetchPromise = import('@/pages/StudentFaceScanPage').catch((error) => {
+        studentRoutePrefetchPromise = import('@/apps/user/desktop/pages/StudentFaceScanPage').catch((error) => {
             studentRoutePrefetchPromise = null;
             throw error;
         });
