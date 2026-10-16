@@ -89,6 +89,10 @@ SLACK_SIGNING_SECRET=...
 SMTP_USER=no-reply@millennia21.id
 SMTP_PASS=...
 SMTP_FROM=no-reply@millennia21.id
+HUB_BASE_URL=https://app-stg.mws.web.id
+CENTRAL_API_BASE_URL=https://db-stg.mws.web.id/api/internal
+CENTRAL_API_TOKEN=...
+CENTRAL_ORGANIZATION_ID=org_...
 ```
 
 ### Production
@@ -112,7 +116,27 @@ SLACK_SIGNING_SECRET=...
 SMTP_USER=no-reply@millennia21.id
 SMTP_PASS=...
 SMTP_FROM=no-reply@millennia21.id
+HUB_BASE_URL=https://app.mws.web.id
+CENTRAL_API_BASE_URL=https://db.mws.web.id/api/internal
+CENTRAL_API_TOKEN=...
+CENTRAL_ORGANIZATION_ID=org_...
 ```
+
+The four Central lines come from the block Central shows when Daily Check-in is added there. The token is shown once.
+
+## Before the First Deploy
+
+1. In Central, add Daily Check-in with its launch address (staging: `https://app-stg.mws.web.id/daily-checkin`) and copy the block into the Komodo Environment field.
+2. In the GitHub repository open Settings, then Environments, and make `staging` and `production`. Each gets the secret `CENTRAL_API_TOKEN` and the variables `CENTRAL_API_BASE_URL` and `CENTRAL_ORGANIZATION_ID` of that Central. The deploy workflow sends the permission list to Central from there, and stops before deploying if Central says no.
+3. Back up the database, then move the old users into the people collection once:
+
+```bash
+cd backend
+npm run migrate:people           # dry-run, prints what it would do
+npm run migrate:people:apply     # writes
+```
+
+Running it again changes nothing for people who are already there. More in `docs/PEOPLE_AND_PERMISSIONS.md`.
 
 ## Deploy Flow
 
@@ -121,7 +145,7 @@ Push to staging
   -> GitHub Actions: staging quality gates
   -> Build BE/FE images tagged :staging
   -> Trigger Komodo stack mws-daily-checkin
-  -> Gateway serves https://app-stg.mws.web.id/
+  -> Gateway serves https://app-stg.mws.web.id/daily-checkin
 
 Push to main
   -> GitHub Actions: production quality gates
