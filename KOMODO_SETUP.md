@@ -127,7 +127,7 @@ The four Central lines come from the block Central shows when Daily Check-in is 
 ## Before the First Deploy
 
 1. In Central, add Daily Check-in with its launch address (staging: `https://app-stg.mws.web.id/daily-checkin`) and copy the block into the Komodo Environment field.
-2. In the GitHub repository open Settings, then Environments, and make `staging` and `production`. Each gets the secret `CENTRAL_API_TOKEN` and the variables `CENTRAL_API_BASE_URL` and `CENTRAL_ORGANIZATION_ID` of that Central. The deploy workflow sends the permission list to Central from there, and stops before deploying if Central says no.
+2. In the GitHub repository open Settings, then Secrets and variables, then Actions, and add these repository secrets: `STAGING_CENTRAL_API_BASE_URL`, `STAGING_CENTRAL_API_TOKEN` and `STAGING_CENTRAL_ORGANIZATION_ID`, and the same three with `PRODUCTION_` in front. The values come from the Central of that environment. The deploy workflow sends the permission list to Central with them, and stops before deploying if Central says no. Names without the prefix are read too, when the prefixed one is missing.
 3. Back up the database, then move the old users into the people collection once:
 
 ```bash
