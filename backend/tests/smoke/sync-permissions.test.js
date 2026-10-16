@@ -12,14 +12,18 @@ describe('permission sync', () => {
         expect(Object.keys(DESCRIPTIONS).every((key) => PERMISSION_VALUES.includes(key))).toBe(true);
     });
 
-    it('reads the address and token from the names the app uses, the old names first', () => {
+    it('reads the address and token from the names the app uses, the new names first', () => {
         expect(connection({ CENTRAL_API_BASE_URL: 'https://db.example.com/api/internal/', CENTRAL_API_TOKEN: 't' })).toEqual({
             url: 'https://db.example.com/api/internal/application-permissions/me',
             token: 't',
         });
         expect(
             connection({ MWS_DATA_CENTER_API_URL: 'http://old/api/internal', MWS_DATA_CENTER_API_TOKEN: 'old', CENTRAL_API_BASE_URL: 'new', CENTRAL_API_TOKEN: 'new' }).token,
-        ).toBe('old');
+        ).toBe('new');
+        expect(connection({ MWS_DATA_CENTER_API_URL: 'http://old/api/internal/', MWS_DATA_CENTER_API_TOKEN: 'old' })).toEqual({
+            url: 'http://old/api/internal/application-permissions/me',
+            token: 'old',
+        });
         expect(() => connection({})).toThrow(/must be set/);
     });
 
