@@ -125,6 +125,8 @@ CENTRAL_ORGANIZATION_ID=org_...
 
 The four Central lines come from the block Central shows when Daily Check-in is added there. The token is shown once.
 
+`HUB_ACCESS_COOKIE_NAME` is optional (default `hub_at`). Staging and production Hubs share the parent domain `mws.web.id`, so give staging its own name (for example `hub_at_stg`) on the staging Hub and on every staging app. Deploy the apps first, then set it everywhere together and sign in again.
+
 ## Before the First Deploy
 
 1. In Central, add Daily Check-in with its launch address (staging: `https://app-stg.mws.web.id/daily-checkin`) and copy the block into the Komodo Environment field.
