@@ -140,6 +140,12 @@ npm run migrate:people:apply     # writes
 
 Running it again changes nothing for people who are already there. More in `docs/PEOPLE_AND_PERMISSIONS.md`.
 
+## After a Deploy
+
+The webhook only starts the deploy in Komodo. If the stack fails there (a wrong file path, a bad env), the webhook still answered and the pipeline would be green. The last step of the deploy job asks the health address of the backend which version it runs and waits until it is the commit that was just built. If the old version keeps running, the job turns red and says to read the last update of the stack in Komodo.
+
+It needs the public address of `/api/health` as `STAGING_HEALTH_URL` (and `PRODUCTION_HEALTH_URL` for main) in the repository secrets or variables, for example `https://app-stg.mws.web.id/daily-checkin/api/health`. Open it in a browser first to check that the gateway passes it on. Without the address the step only warns. Komodo can also tell you about a failed deploy by itself: add an Alerter under Settings, Alerters.
+
 ## Deploy Flow
 
 ```text

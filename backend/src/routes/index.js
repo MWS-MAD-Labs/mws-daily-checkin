@@ -1,3 +1,4 @@
+const { appVersion } = require('../utils/appVersion');
 const express = require('express');
 const router = express.Router();
 const { checkinLimiter } = require('../middleware/rateLimiter');
@@ -202,7 +203,7 @@ router.get('/health', (req, res) => {
         success: true,
         message: 'MWS Daily Check-In Backend API is running',
         timestamp: new Date().toISOString(),
-        version: '1.0.0'
+        version: appVersion()
     });
 });
 

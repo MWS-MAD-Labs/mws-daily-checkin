@@ -9,6 +9,10 @@ FROM node:18-alpine AS runner
 
 WORKDIR /app
 
+# The commit this image was built from. The health address reports it.
+ARG APP_VERSION=unknown
+ENV APP_VERSION=$APP_VERSION
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
