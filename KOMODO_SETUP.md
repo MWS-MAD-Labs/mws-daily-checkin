@@ -30,10 +30,11 @@ Required GitHub Actions secrets:
 
 | Secret name | Notes |
 |---|---|
-| `KOMODO_STAGING_WEBHOOK_URL` | Preferred staging webhook URL |
-| `KOMODO_STAGING_WEBHOOK_SECRET` | Preferred staging webhook secret |
-| `KOMODO_WEBHOOK_URL` | Legacy fallback, currently supported |
-| `KOMODO_WEBHOOK_SECRET` | Legacy fallback, currently supported |
+| `KOMODO_WEBHOOK_URL_STAGING` | The Deploy webhook of the staging stack in Komodo. Not read from `KOMODO_WEBHOOK_URL`, so staging can never trigger another stack |
+| `KOMODO_WEBHOOK_SECRET_STAGING` | The staging webhook secret. The shared `KOMODO_WEBHOOK_SECRET` is read when this is empty |
+| `KOMODO_STAGING_WEBHOOK_URL` / `KOMODO_STAGING_WEBHOOK_SECRET` | The older names of the two, still read |
+
+The stack picks the branch: the staging stack in Komodo must follow `staging`. A better home for these values is a GitHub Environment named `staging` (and `production`) with the same names in both, as Exima does.
 
 ## Production Stack
 
