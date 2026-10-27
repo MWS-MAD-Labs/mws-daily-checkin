@@ -49,7 +49,7 @@ Both products share the same Google OAuth users. Users with MTSS roles are redir
 
 Komodo deployment is image-based and driven by GitHub Actions:
 
-- `staging` branch -> GHCR `:staging` images -> staging stack at `https://app-stg.mws.web.id`
-- `main` branch -> GHCR `:production` images -> production stack at `https://app.millenniaws.sch.id`
+- `staging` branch -> GHCR `:staging` images -> staging stack at `https://hub-stg.example.org`
+- `main` branch -> GHCR `:production` images -> production stack at `https://daily.example.org`
 
 See `KOMODO_SETUP.md` for the full stack, secret, and URL reference.

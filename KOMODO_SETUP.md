@@ -4,8 +4,8 @@ Daily Check-in is served at the root path of the unified MWS app.
 
 | Environment | Branch | Image tag | Public URL | Komodo stack |
 |---|---|---|---|---|
-| Staging | `staging` | `staging` | `https://app-stg.mws.web.id` | `mws-daily-checkin` |
-| Production | `main` | `production` | `https://app.millenniaws.sch.id` | `mws-daily-checkin-production` |
+| Staging | `staging` | `staging` | `https://hub-stg.example.org` | `<staging-stack>` |
+| Production | `main` | `production` | `https://daily.example.org` | `<production-stack>` |
 
 The stack is manual compose in Komodo. Komodo does not build images; GitHub
 Actions builds BE/FE images, pushes them to GHCR, then calls the stack webhook.
@@ -16,12 +16,12 @@ Use the existing staging stack if it already exists:
 
 | Field | Value |
 |---|---|
-| Stack name | `mws-daily-checkin` |
+| Stack name | `<staging-stack>` |
 | Source | Manual compose |
 | Branch that triggers it | `staging` |
 | Images | `ghcr.io/mws-mad-labs/mws-daily-checkin-{be,fe}:staging` |
-| Gateway network | `mws-unified` |
-| Gateway hostname | `https://app-stg.mws.web.id` |
+| Gateway network | `<gateway-network-staging>` |
+| Gateway hostname | `https://hub-stg.example.org` |
 
 Compose reference is also available in the gateway repo:
 `mws-gateway/deploy/daily-checkin.compose.yml`.
@@ -42,20 +42,20 @@ Production/main is deployed from a dedicated Komodo stack:
 
 | Field | Value |
 |---|---|
-| Stack name | `mws-daily-checkin-production` |
-| Komodo stack id | `6a3b865d1309552867cc4200` |
+| Stack name | `<production-stack>` |
+| Komodo stack id | `<stack-id>` |
 | Source | Git repo |
 | Repo | `MWS-MAD-Labs/mws-daily-checkin` |
 | Branch | `main` |
 | Run directory | `deploy` |
 | Compose file | `production.compose.yml` |
 | Images | `ghcr.io/mws-mad-labs/mws-daily-checkin-{be,fe}:production` |
-| Gateway network | `mws-unified-prod` |
-| Gateway hostname | `https://app.millenniaws.sch.id` |
-| Webhook URL | `https://komo.mws.web.id/listener/github/stack/mws-daily-checkin-production/deploy` |
+| Gateway network | `<gateway-network-production>` |
+| Gateway hostname | `https://daily.example.org` |
+| Webhook URL | `https://<komodo-host>/listener/github/stack/<production-stack>/deploy` |
 
 Deploy the production gateway first so the external Docker network
-`mws-unified-prod` exists.
+`<gateway-network-production>` exists.
 
 Required GitHub Actions secrets:
 
@@ -77,21 +77,21 @@ JWT_SECRET=...
 SESSION_SECRET=...
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
-GOOGLE_REDIRECT_URL=https://app-stg.mws.web.id/auth/google/callback
+GOOGLE_REDIRECT_URL=https://hub-stg.example.org/auth/google/callback
 GOOGLE_AI_API_KEY=...
 CLOUDINARY_CLOUD_NAME=...
 CLOUDINARY_API_KEY=...
 CLOUDINARY_API_SECRET=...
-FRONTEND_URL=https://app-stg.mws.web.id
-CORS_ORIGINS=https://app-stg.mws.web.id
+FRONTEND_URL=https://hub-stg.example.org
+CORS_ORIGINS=https://hub-stg.example.org
 SLACK_BOT_TOKEN=xoxb-...
 SLACK_APP_TOKEN=xapp-...
 SLACK_SIGNING_SECRET=...
 SMTP_USER=no-reply@millennia21.id
 SMTP_PASS=...
 SMTP_FROM=no-reply@millennia21.id
-HUB_BASE_URL=https://app-stg.mws.web.id
-CENTRAL_API_BASE_URL=https://db-stg.mws.web.id/api/internal
+HUB_BASE_URL=https://hub-stg.example.org
+CENTRAL_API_BASE_URL=https://central-stg.example.org/api/internal
 CENTRAL_API_TOKEN=...
 CENTRAL_ORGANIZATION_ID=org_...
 ```
@@ -104,32 +104,32 @@ JWT_SECRET=...
 SESSION_SECRET=...
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
-GOOGLE_REDIRECT_URL=https://app.millenniaws.sch.id/auth/google/callback
+GOOGLE_REDIRECT_URL=https://daily.example.org/auth/google/callback
 GOOGLE_AI_API_KEY=...
 CLOUDINARY_CLOUD_NAME=...
 CLOUDINARY_API_KEY=...
 CLOUDINARY_API_SECRET=...
-FRONTEND_URL=https://app.millenniaws.sch.id
-CORS_ORIGINS=https://app.millenniaws.sch.id
+FRONTEND_URL=https://daily.example.org
+CORS_ORIGINS=https://daily.example.org
 SLACK_BOT_TOKEN=xoxb-...
 SLACK_APP_TOKEN=xapp-...
 SLACK_SIGNING_SECRET=...
 SMTP_USER=no-reply@millennia21.id
 SMTP_PASS=...
 SMTP_FROM=no-reply@millennia21.id
-HUB_BASE_URL=https://app.mws.web.id
-CENTRAL_API_BASE_URL=https://db.mws.web.id/api/internal
+HUB_BASE_URL=https://hub.example.org
+CENTRAL_API_BASE_URL=https://central.example.org/api/internal
 CENTRAL_API_TOKEN=...
 CENTRAL_ORGANIZATION_ID=org_...
 ```
 
 The four Central lines come from the block Central shows when Daily Check-in is added there. The token is shown once.
 
-`HUB_ACCESS_COOKIE_NAME` is optional (default `hub_at`). Staging and production Hubs share the parent domain `mws.web.id`, so give staging its own name (for example `hub_at_stg`) on the staging Hub and on every staging app. Deploy the apps first, then set it everywhere together and sign in again.
+`HUB_ACCESS_COOKIE_NAME` is optional (default `hub_at`). Staging and production Hubs share the same parent domain, so give staging its own name (for example `hub_at_stg`) on the staging Hub and on every staging app. Deploy the apps first, then set it everywhere together and sign in again.
 
 ## Before the First Deploy
 
-1. In Central, add Daily Check-in with its launch address (staging: `https://app-stg.mws.web.id/daily-checkin`) and copy the block into the Komodo Environment field.
+1. In Central, add Daily Check-in with its launch address (staging: `https://hub-stg.example.org/daily-checkin`) and copy the block into the Komodo Environment field.
 2. In the GitHub repository open Settings, then Secrets and variables, then Actions, and add these repository secrets: `STAGING_CENTRAL_API_BASE_URL`, `STAGING_CENTRAL_API_TOKEN` and `STAGING_CENTRAL_ORGANIZATION_ID`, and the same three with `PRODUCTION_` in front. The values come from the Central of that environment. The deploy workflow sends the permission list to Central with them, and stops before deploying if Central says no. Names without the prefix are read too, when the prefixed one is missing.
 3. Remove `MWS_DATA_CENTER_API_URL` and `MWS_DATA_CENTER_API_TOKEN` from the Komodo Environment if they are still there. The app reads the `CENTRAL_API_*` names first, but the old ones would be used if the new ones are empty.
 4. Back up the database, then move the old users into the people collection once:
@@ -146,7 +146,7 @@ Running it again changes nothing for people who are already there. More in `docs
 
 The webhook only starts the deploy in Komodo. If the stack fails there (a wrong file path, a bad env), the webhook still answered and the pipeline would be green. The last step of the deploy job asks the health address of the backend which version it runs and waits until it is the commit that was just built. If the old version keeps running, the job turns red and says to read the last update of the stack in Komodo.
 
-It needs the public address of `/api/health` as `STAGING_HEALTH_URL` (and `PRODUCTION_HEALTH_URL` for main) in the repository secrets or variables, for example `https://app-stg.mws.web.id/daily-checkin/api/health`. Open it in a browser first to check that the gateway passes it on. Without the address the step only warns. Komodo can also tell you about a failed deploy by itself: add an Alerter under Settings, Alerters.
+It needs the public address of `/api/health` as `STAGING_HEALTH_URL` (and `PRODUCTION_HEALTH_URL` for main) in the repository secrets or variables, for example `https://hub-stg.example.org/daily-checkin/api/health`. Open it in a browser first to check that the gateway passes it on. Without the address the step only warns. Komodo can also tell you about a failed deploy by itself: add an Alerter under Settings, Alerters.
 
 ## Deploy Flow
 
@@ -154,12 +154,18 @@ It needs the public address of `/api/health` as `STAGING_HEALTH_URL` (and `PRODU
 Push to staging
   -> GitHub Actions: staging quality gates
   -> Build BE/FE images tagged :staging
-  -> Trigger Komodo stack mws-daily-checkin
-  -> Gateway serves https://app-stg.mws.web.id/daily-checkin
+  -> Trigger Komodo stack <staging-stack>
+  -> Gateway serves https://hub-stg.example.org/daily-checkin
 
 Push to main
   -> GitHub Actions: production quality gates
   -> Build BE/FE images tagged :production
-  -> Trigger Komodo stack mws-daily-checkin-production
-  -> Gateway serves https://app.millenniaws.sch.id/
+  -> Trigger Komodo stack <production-stack>
+  -> Gateway serves https://daily.example.org/
 ```
+
+## About the names in this file
+
+This repository is public, so the stack names, network names, stack ids, Komodo host and every address above are
+placeholders (`<staging-stack>`, `<gateway-network-production>`, `hub.example.org`, ...). The real values live in
+Komodo and in the GitHub Environments, not here.
