@@ -1,0 +1,6 @@
+{
+  "application": "daily-checkin",
+  "manifest": "src/constants/permissionManifest.js",
+  "manifestExport": "permissionManifest",
+  "doctor": { "appUrlEnv": "FRONTEND_URL" }
+}
