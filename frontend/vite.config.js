@@ -10,6 +10,9 @@ import { VitePWA } from 'vite-plugin-pwa'
 // (e.g. '/' for standalone dev).
 const BASE_PATH = process.env.VITE_BASE_PATH || '/daily-checkin/'
 
+// The Daily backend. One place, so the prefixed and the standalone routes cannot point at different apps.
+const API_TARGET = process.env.VITE_API_PROXY_TARGET || 'http://localhost:3003'
+
 export default defineConfig({
     base: BASE_PATH,
     plugins: [
@@ -224,6 +227,8 @@ export default defineConfig({
     },
     server: {
         port: 5174,
+        // A taken port stops the start instead of moving to a port another app expects.
+        strictPort: true,
         proxy: {
             // The app is served under BASE_PATH ('/daily-checkin/'), so the
             // client calls /daily-checkin/api, /daily-checkin/auth and
@@ -232,13 +237,13 @@ export default defineConfig({
             // to the backend. Keep the unprefixed entries below for
             // standalone dev (VITE_BASE_PATH='/').
             '/daily-checkin/api': {
-                target: 'http://localhost:3003',
+                target: API_TARGET,
                 changeOrigin: true,
                 secure: false,
                 rewrite: (p) => p.replace(/^\/daily-checkin/, '')
             },
             '/daily-checkin/auth': {
-                target: 'http://localhost:3003',
+                target: API_TARGET,
                 changeOrigin: true,
                 secure: false,
                 // /daily-checkin/auth/callback is an SPA route, not a backend route.
@@ -247,19 +252,19 @@ export default defineConfig({
                 rewrite: (p) => p.replace(/^\/daily-checkin/, '')
             },
             '/daily-checkin/socket.io': {
-                target: 'http://localhost:3003',
+                target: API_TARGET,
                 changeOrigin: true,
                 secure: false,
                 ws: true,
                 rewrite: (p) => p.replace(/^\/daily-checkin/, '')
             },
             '/api': {
-                target: 'http://localhost:3001',
+                target: API_TARGET,
                 changeOrigin: true,
                 secure: false
             },
             '/auth': {
-                target: 'http://localhost:3001',
+                target: API_TARGET,
                 changeOrigin: true,
                 secure: false,
                 // /auth/callback is a frontend SPA route (AuthCallback.jsx), not
@@ -271,7 +276,7 @@ export default defineConfig({
                 }
             },
             '/socket.io': {
-                target: 'http://localhost:3001',
+                target: API_TARGET,
                 changeOrigin: true,
                 secure: false,
                 ws: true
