@@ -20,8 +20,14 @@ Use the existing staging stack if it already exists:
 | Source | Manual compose |
 | Branch that triggers it | `staging` |
 | Images | `ghcr.io/mws-mad-labs/mws-daily-checkin-{be,fe}:staging` |
+| Compose file | `deploy/staging.compose.yml` |
 | Gateway network | `<gateway-network-staging>` |
 | Gateway hostname | `https://hub-stg.example.org` |
+
+Set `GATEWAY_NETWORK` (`<gateway-network-staging>`), `FRONTEND_CONTAINER_NAME` (`<daily-frontend-container>`) and
+`BACKEND_CONTAINER_NAME` (`<daily-backend-container>`) in the stack environment. The frontend container name is what the
+gateway looks for. The compose publishes no host port, so it does not clash with other stacks on the host. Do not use the
+root `docker-compose.yml` in Komodo, it is for local use and maps host port 8081.
 
 Compose reference is also available in the gateway repo:
 `mws-gateway/deploy/daily-checkin.compose.yml`.

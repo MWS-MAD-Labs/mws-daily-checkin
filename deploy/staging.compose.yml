@@ -1,0 +1,59 @@
+# mws-daily-checkin staging - Komodo manual compose
+# Image-based, no build step. The gateway reaches this stack through the external gateway network by the frontend
+# container name. Nothing is published on the host, so it cannot clash with another stack's port.
+# Set these in the stack environment: GATEWAY_NETWORK, FRONTEND_CONTAINER_NAME, BACKEND_CONTAINER_NAME.
+
+services:
+  backend:
+    image: ghcr.io/mws-mad-labs/mws-daily-checkin-be:staging
+    container_name: ${BACKEND_CONTAINER_NAME:?set it in the stack environment}
+    restart: unless-stopped
+    env_file:
+      - ${ENV_FILE:-.env}
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+    expose:
+      - "3001"
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    image: ghcr.io/mws-mad-labs/mws-daily-checkin-fe:staging
+    container_name: ${FRONTEND_CONTAINER_NAME:?set it in the stack environment}
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - internal
+      - gateway
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  internal:
+    driver: bridge
+  gateway:
+    external: true
+    name: ${GATEWAY_NETWORK:?set it in the stack environment}

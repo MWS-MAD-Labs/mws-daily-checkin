@@ -1,8 +1,8 @@
-# mws-daily-checkin — Local Development & Komodo Reference
+# mws-daily-checkin - local reference compose
 # ─────────────────────────────────────────────────────────
-# LOCAL DEV:  docker compose up --build
-# KOMODO:     Uses image: tags (no build:) — images pulled from GHCR
-#             Registry: ghcr.io/mws-mad-labs/
+# Local use only: it publishes the frontend on host port 8081 (set DAILY_WEB_PORT to use another one).
+# Komodo stacks use deploy/staging.compose.yml and deploy/production.compose.yml, which publish no host port and
+# join the gateway network instead.
 # ─────────────────────────────────────────────────────────
 
 services:
@@ -29,7 +29,7 @@ services:
     container_name: mws-daily-checkin-fe
     restart: unless-stopped
     ports:
-      - "8081:80"
+      - "${DAILY_WEB_PORT:-8081}:80"
     depends_on:
       backend:
         condition: service_healthy
