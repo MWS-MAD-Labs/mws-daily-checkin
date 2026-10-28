@@ -13,6 +13,7 @@
     "test:watch": "jest --watch",
     "permissions:sync": "node src/scripts/syncPermissions.js",
     "permissions:check": "node src/scripts/syncPermissions.js --check",
+    "access:doctor": "mws-access doctor",
     "migrate:people": "node src/scripts/migrateToPerson.js",
     "migrate:people:apply": "node src/scripts/migrateToPerson.js --apply"
   },
@@ -42,7 +43,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.19.1",
     "multer": "^2.0.2",
-    "mws-central-auth": "github:MWS-MAD-Labs/mws-central-auth#v0.10.0",
+    "mws-central-auth": "github:MWS-MAD-Labs/mws-central-auth#v0.14.2",
     "node-cache": "^5.1.2",
     "nodemailer": "^7.0.10",
     "socket.io": "^4.8.1",
