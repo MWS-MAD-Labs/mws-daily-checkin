@@ -43,7 +43,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.19.1",
     "multer": "^2.0.2",
-    "mws-central-auth": "github:MWS-MAD-Labs/mws-central-auth#v0.14.2",
+    "mws-central-auth": "git+https://github.com/MWS-MAD-Labs/mws-central-auth.git#v0.14.2",
     "node-cache": "^5.1.2",
     "nodemailer": "^7.0.10",
     "socket.io": "^4.8.1",
