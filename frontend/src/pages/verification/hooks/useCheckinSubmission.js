@@ -1,6 +1,5 @@
 import { useCallback, useState } from "react";
 import authService from "@/services/authService";
-import { getStoredAuthToken } from "@/utils/authStorage";
 
 const getSupportBand = (value) => {
     const score = Number(value);
@@ -68,18 +67,6 @@ export const useCheckinSubmission = ({
 
         setIsSubmitting(true);
         try {
-            const token = getStoredAuthToken();
-
-            if (!token) {
-                toast?.({
-                    title: "Login Required",
-                    description: "Please log in to save your AI emotion check-in.",
-                    variant: "destructive"
-                });
-                navigate("/");
-                return;
-            }
-
             const normalizedSupportSelection = String(selectedSupportContact || "").trim().toLowerCase();
             const isNoNeedSelection = !normalizedSupportSelection ||
                 normalizedSupportSelection === "no need" ||
