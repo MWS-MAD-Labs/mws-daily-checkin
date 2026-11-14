@@ -22,7 +22,7 @@ export default defineConfig({
             registerType: 'autoUpdate',
             filename: 'mws-sw.js',
             cleanupOutdatedCaches: true,
-            includeAssets: ['vite.svg', 'Millennia.webp'],
+            includeAssets: ['Daily-Checkin.svg'],
             manifest: {
                 name: 'MWS IntegraLearn - Premium Education Platform',
                 short_name: 'MWS IntegraLearn',
@@ -35,15 +35,9 @@ export default defineConfig({
                 start_url: BASE_PATH,
                 icons: [
                     {
-                        src: 'Millennia.webp',
-                        sizes: '192x192',
-                        type: 'image/webp',
-                        purpose: 'any maskable'
-                    },
-                    {
-                        src: 'Millennia.webp',
-                        sizes: '512x512',
-                        type: 'image/webp',
+                        src: 'Daily-Checkin.svg',
+                        sizes: 'any',
+                        type: 'image/svg+xml',
                         purpose: 'any maskable'
                     }
                 ],

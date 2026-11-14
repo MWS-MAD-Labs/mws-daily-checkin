@@ -7,8 +7,7 @@ const DYNAMIC_CACHE = 'mws-dynamic-v1.0.0';
 const STATIC_ASSETS = [
     '/',
     '/manifest.json',
-    '/vite.svg',
-    '/Millennia.webp',
+    '/Daily-Checkin.svg',
     '/index.html',
     '/src/main.jsx',
     '/src/index.css'
@@ -131,8 +130,8 @@ self.addEventListener('push', (event) => {
 
     const options = {
         body: event.data ? event.data.text() : 'New notification from MWS IntegraLearn',
-        icon: '/Millennia.webp',
-        badge: '/vite.svg',
+        icon: '/Daily-Checkin.svg',
+        badge: '/Daily-Checkin.svg',
         vibrate: [100, 50, 100],
         data: {
             dateOfArrival: Date.now(),
@@ -142,12 +141,12 @@ self.addEventListener('push', (event) => {
             {
                 action: 'explore',
                 title: 'Explore',
-                icon: '/vite.svg'
+                icon: '/Daily-Checkin.svg'
             },
             {
                 action: 'close',
                 title: 'Close',
-                icon: '/vite.svg'
+                icon: '/Daily-Checkin.svg'
             }
         ]
     };

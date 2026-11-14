@@ -9,24 +9,15 @@
   "orientation": "portrait-primary",
   "scope": "/",
   "lang": "id-ID",
-  "categories": ["education", "productivity"],
+  "categories": [
+    "education",
+    "productivity"
+  ],
   "icons": [
     {
-      "src": "/mws-favicon.svg",
+      "src": "/Daily-Checkin.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/Millennia.webp",
-      "sizes": "192x192",
-      "type": "image/webp",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/Millennia.webp",
-      "sizes": "512x512",
-      "type": "image/webp",
       "purpose": "any maskable"
     }
   ],
@@ -52,8 +43,9 @@
       "url": "/dashboard",
       "icons": [
         {
-          "src": "/mws-favicon.svg",
-          "sizes": "96x96"
+          "src": "/Daily-Checkin.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
         }
       ]
     },
@@ -64,8 +56,9 @@
       "url": "/profile",
       "icons": [
         {
-          "src": "/mws-favicon.svg",
-          "sizes": "96x96"
+          "src": "/Daily-Checkin.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
         }
       ]
     }

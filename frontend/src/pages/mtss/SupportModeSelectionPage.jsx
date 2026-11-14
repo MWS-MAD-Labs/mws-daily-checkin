@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { Brain, Handshake, ArrowRight, Sparkles, Shield, Users } from "lucide-react";
-import Logo from "../../components/ui/Millennia.webp";
+const Logo = `${import.meta.env.BASE_URL}Daily-Checkin.svg`;
 import gsap from "gsap";
 import { MWS_STUDENT_CARD_ASSET_IDS } from "@/data/mwsStudentsDesignAssets";
 import { getDefaultMtssRoute, getMtssAccessProfile } from "@/utils/mtssAccess";
@@ -273,7 +273,7 @@ const SupportModeSelectionPage = memo(() => {
           <div className="smsp-logo-wrap inline-flex items-center gap-3 px-4 py-2.5 rounded-full bg-white/80 dark:bg-white/10 backdrop-blur-xl shadow-lg">
             <span className="w-10 h-10 rounded-2xl bg-gradient-to-r from-[#ff80b5] via-[#ffb553] to-[#7dd3fc] p-[2px] flex items-center justify-center">
               <span className="w-full h-full rounded-2xl bg-white/90 dark:bg-white/5 flex items-center justify-center">
-                <img src={Logo} alt="MWS Logo" className="w-7 h-7 object-contain" loading="lazy" />
+                <img src={Logo} alt="Daily Check-in Logo" className="w-7 h-7 object-contain" loading="lazy" />
               </span>
             </span>
             <div className="text-left">

@@ -6,7 +6,7 @@
  * - Navigation shortcuts + dark mode toggle + logout
  */
 import { memo, useState, useCallback, useRef, useEffect } from "react";
-import { LogOut, Moon, Sun, User } from "lucide-react";
+import { LogOut, Moon, MoveRight, Sun, User } from "lucide-react";
 import { useSelector, useDispatch } from "react-redux";
 import { useNavigate, useLocation } from "react-router-dom";
 import { leaveToHub } from "@/store/slices/authSlice";
@@ -276,7 +276,7 @@ const QuickMenu = memo(() => {
                             <span className="qm-item-label">
                                 {loading ? "Opening the Hub…" : "Back to Hub"}
                             </span>
-                            <span className="qm-item-meta">→</span>
+                            <span className="qm-item-meta"><MoveRight/></span>
                         </button>
                     </div>
                 </div>
