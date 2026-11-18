@@ -193,3 +193,97 @@ describe('sync with Central', () => {
         expect(syncIntervalMs('120')).toBe(120000);
     });
 });
+
+describe('profile sync follows the Central person id when an email changed', () => {
+    const NEW = 'two-new@sync-test.id';
+    const OLD = 'two-old@sync-test.id';
+    const teacher = (over = {}) => employee({ person_id: 'p-2', email: NEW, full_name: 'Teacher Two', employee_id: '01.01.002', ...over });
+    const assignment = (over = {}) => ({
+        employee_email: NEW,
+        workforce_member: { person_id: 'p-2', email: NEW },
+        grade_name: 'Grade 7',
+        class_name: 'Coding',
+        role: 'HOMEROOM',
+        ...over,
+    });
+
+    beforeAll(async () => {
+        await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/integra-learn-test');
+        await Person.syncIndexes();
+    });
+    afterAll(async () => {
+        await Person.deleteMany({ email: /@sync-test\.id$/ });
+        await mongoose.connection.close();
+    });
+    beforeEach(async () => {
+        await Person.deleteMany({ email: /@sync-test\.id$/ });
+    });
+
+    const localPerson = (over = {}) => Person.create({
+        centralPersonId: 'p-2', email: OLD, name: 'Teacher Two', personType: 'employee', jobKind: 'teacher', unit: 'Elementary',
+        isActive: true, centralStatus: 'active', classes: [{ grade: 'Grade 7', className: 'Coding', role: 'Homeroom Teacher' }], ...over,
+    });
+
+    it('keeps a teacher\'s classes and takes the new email, instead of emptying the classes until the next sign-in', async () => {
+        await localPerson();
+        const api = fakeApi({
+            listActiveEmployees: jest.fn().mockResolvedValue([teacher()]),
+            listClassTeacherAssignments: jest.fn().mockResolvedValue([assignment()]),
+        });
+
+        const result = await syncProfiles(api);
+
+        const person = await Person.findOne({ centralPersonId: 'p-2' });
+        expect(person.email).toBe(NEW);
+        expect(person.isActive).toBe(true);
+        expect(person.classes.map((c) => `${c.grade}|${c.className}`)).toEqual(['Grade 7|Coding']);
+        expect(result.emailsChanged).toBe(1);
+    });
+
+    it('finds the classes by person id even when the assignment carries only the new email', async () => {
+        await localPerson({ classes: [] });
+        const api = fakeApi({
+            listActiveEmployees: jest.fn().mockResolvedValue([teacher()]),
+            listClassTeacherAssignments: jest.fn().mockResolvedValue([assignment({ employee_email: NEW })]),
+        });
+
+        await syncProfiles(api);
+
+        expect((await Person.findOne({ centralPersonId: 'p-2' })).classes).toHaveLength(1);
+    });
+
+    it('keeps a student active and takes the new email when Central changed it', async () => {
+        await Person.create({
+            centralPersonId: 'p-9', email: 'kid-old@sync-test.id', name: 'Kid', personType: 'student', isActive: true, centralStatus: 'active', unit: 'Elementary',
+        });
+        const api = fakeApi({
+            listActiveEmployees: jest.fn().mockResolvedValue([]),
+            listStudentsByStatus: jest.fn().mockImplementation(async (status) => (status === 'ACTIVE'
+                ? [{ person_id: 'p-9', email: 'kid-new@sync-test.id', full_name: 'Kid', nick_name: 'Kid', gender: 'MALE', status: 'ACTIVE', current_grade: 'Grade 3', current_class: 'Grade 3 - A' }]
+                : [])),
+        });
+
+        const result = await syncProfiles(api);
+
+        const kid = await Person.findOne({ centralPersonId: 'p-9' });
+        expect(kid.isActive).toBe(true);
+        expect(kid.email).toBe('kid-new@sync-test.id');
+        expect(result.deactivated).toBe(0);
+        expect(result.emailsChanged).toBe(1);
+    });
+
+    it('does not give a person an email another person here already has, and says so', async () => {
+        await localPerson();
+        await Person.create({ centralPersonId: 'p-3', email: NEW, name: 'Teacher Three', personType: 'employee', jobKind: 'teacher', isActive: true, centralStatus: 'active' });
+        const api = fakeApi({
+            listActiveEmployees: jest.fn().mockResolvedValue([teacher(), employee({ person_id: 'p-3', email: 'three-moved@sync-test.id', full_name: 'Teacher Three', employee_id: '01.01.003' })]),
+            listClassTeacherAssignments: jest.fn().mockResolvedValue([]),
+        });
+
+        const result = await syncProfiles(api);
+
+        expect((await Person.findOne({ centralPersonId: 'p-2' })).email).toBe(OLD);
+        expect(result.emailsHeld).toBe(1);
+        expect(result.warnings.join(' ')).toContain('already belongs to another person');
+    });
+});
